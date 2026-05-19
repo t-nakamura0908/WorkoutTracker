@@ -68,6 +68,33 @@ final class WorkoutViewModel {
         saveContext(context)
     }
 
+    // MARK: - テンプレート適用
+
+    func applyTemplate(_ template: WorkoutTemplate, context: ModelContext) {
+        for templateExercise in template.sortedExercises {
+            let exercise = WorkoutExercise(
+                name: templateExercise.name,
+                order: session.exercises.count,
+                defaultIntervalSeconds: templateExercise.defaultIntervalSeconds
+            )
+            exercise.session = session
+            session.exercises.append(exercise)
+            context.insert(exercise)
+
+            for i in 1...max(1, templateExercise.defaultSets) {
+                let set = ExerciseSet(
+                    setNumber: i,
+                    weight: templateExercise.defaultWeight,
+                    reps: templateExercise.defaultReps
+                )
+                set.exercise = exercise
+                exercise.sets.append(set)
+                context.insert(set)
+            }
+        }
+        saveContext(context)
+    }
+
     // MARK: - セット完了 + インターバル開始
 
     func completeSet(_ set: ExerciseSet, exercise: WorkoutExercise, context: ModelContext) {

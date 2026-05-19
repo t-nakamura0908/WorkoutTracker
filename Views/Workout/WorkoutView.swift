@@ -6,6 +6,7 @@ struct WorkoutView: View {
     @Environment(\.dismiss) private var dismiss
     let session: WorkoutSession
     @State private var viewModel: WorkoutViewModel?
+    @State private var showingTemplates = false
 
     var body: some View {
         NavigationStack {
@@ -24,8 +25,17 @@ struct WorkoutView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if let vm = viewModel {
-                        Button {
-                            vm.showingAddExercise = true
+                        Menu {
+                            Button {
+                                vm.showingAddExercise = true
+                            } label: {
+                                Label("種目を追加", systemImage: "plus")
+                            }
+                            Button {
+                                showingTemplates = true
+                            } label: {
+                                Label("テンプレートを適用", systemImage: "rectangle.stack")
+                            }
                         } label: {
                             Image(systemName: "plus")
                         }
@@ -36,6 +46,16 @@ struct WorkoutView: View {
         .onAppear {
             let repo = WorkoutRepository(modelContext: modelContext)
             viewModel = WorkoutViewModel(session: session, repository: repo)
+        }
+        .sheet(isPresented: $showingTemplates) {
+            NavigationStack {
+                if let vm = viewModel {
+                    TemplateListView { template in
+                        vm.applyTemplate(template, context: modelContext)
+                        showingTemplates = false
+                    }
+                }
+            }
         }
     }
 }

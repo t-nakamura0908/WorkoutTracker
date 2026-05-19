@@ -15,6 +15,7 @@ final class ChartsViewModel {
     var weightData: [ChartDataPoint] = []
     var repsData: [ChartDataPoint] = []
     var monthlyCountData: [ChartDataPoint] = []
+    var bodyWeightData: [ChartDataPoint] = []
     var isLoading = false
     var errorMessage: String?
     var selectedChartTab = 0
@@ -36,6 +37,7 @@ final class ChartsViewModel {
                 await loadExerciseData(name: first)
             }
             await loadMonthlyData()
+            await loadBodyWeightData()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -53,6 +55,19 @@ final class ChartsViewModel {
                 guard let date = exercise.session?.date else { return nil }
                 return ChartDataPoint(date: date, value: Double(exercise.totalReps), label: exercise.name)
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadBodyWeightData() async {
+        do {
+            let conditions = try repository.fetchConditions()
+            bodyWeightData = conditions
+                .filter { $0.bodyWeight > 0 }
+                .map { ChartDataPoint(date: $0.date, value: $0.bodyWeight, label: "体重") }
+                .sorted { $0.date < $1.date }
         } catch {
             errorMessage = error.localizedDescription
         }

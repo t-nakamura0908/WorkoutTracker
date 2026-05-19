@@ -20,7 +20,10 @@ struct WorkoutTrackerApp: App {
         let schema = Schema([
             WorkoutSession.self,
             WorkoutExercise.self,
-            ExerciseSet.self
+            ExerciseSet.self,
+            DailyCondition.self,
+            WorkoutTemplate.self,
+            TemplateExercise.self
         ])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

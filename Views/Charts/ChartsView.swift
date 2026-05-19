@@ -37,6 +37,7 @@ private struct ChartsContentView: View {
                     Text("重量").tag(0)
                     Text("回数").tag(1)
                     Text("月別").tag(2)
+                    Text("体重").tag(3)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
@@ -48,8 +49,10 @@ private struct ChartsContentView: View {
                 case 1:
                     exercisePicker
                     repsChart
-                default:
+                case 2:
                     monthlyChart
+                default:
+                    bodyWeightChart
                 }
             }
             .padding(.vertical)
@@ -174,6 +177,48 @@ private struct ChartsContentView: View {
                     }
                 }
                 .chartYAxisLabel("回")
+                .padding(.horizontal)
+            }
+        }
+        .padding(.vertical)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal)
+    }
+
+    private var bodyWeightChart: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("体重推移")
+                .font(.headline)
+                .padding(.horizontal)
+
+            if viewModel.bodyWeightData.isEmpty {
+                chartEmptyView
+            } else {
+                Chart(viewModel.bodyWeightData) { point in
+                    LineMark(
+                        x: .value("日付", point.date),
+                        y: .value("体重", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.purple)
+
+                    AreaMark(
+                        x: .value("日付", point.date),
+                        y: .value("体重", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.purple.opacity(0.1))
+
+                    PointMark(
+                        x: .value("日付", point.date),
+                        y: .value("体重", point.value)
+                    )
+                    .foregroundStyle(.purple)
+                    .symbolSize(50)
+                }
+                .frame(height: 220)
+                .chartYAxisLabel("kg")
+                .chartYScale(domain: .automatic(includesZero: false))
                 .padding(.horizontal)
             }
         }

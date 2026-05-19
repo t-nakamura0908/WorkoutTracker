@@ -5,12 +5,17 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: HomeViewModel?
     @State private var showingWorkout = false
+    @State private var showingCondition = false
 
     var body: some View {
         NavigationStack {
             Group {
                 if let vm = viewModel {
-                    HomeContentView(viewModel: vm, showingWorkout: $showingWorkout)
+                    HomeContentView(
+                        viewModel: vm,
+                        showingWorkout: $showingWorkout,
+                        showingCondition: $showingCondition
+                    )
                 } else {
                     ProgressView()
                 }
@@ -27,9 +32,12 @@ struct HomeView: View {
         .sheet(isPresented: $showingWorkout) {
             if let session = viewModel?.todaySession {
                 WorkoutView(session: session)
-                    .onDisappear {
-                        Task { await viewModel?.loadData() }
-                    }
+                    .onDisappear { Task { await viewModel?.loadData() } }
+            }
+        }
+        .sheet(isPresented: $showingCondition) {
+            ConditionView(existingCondition: viewModel?.todayCondition) {
+                Task { await viewModel?.loadData() }
             }
         }
     }
@@ -39,19 +47,19 @@ private struct HomeContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var viewModel: HomeViewModel
     @Binding var showingWorkout: Bool
+    @Binding var showingCondition: Bool
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                conditionSection
                 todaySection
                 statsSection
                 recentSection
             }
             .padding()
         }
-        .refreshable {
-            await viewModel.loadData()
-        }
+        .refreshable { await viewModel.loadData() }
         .alert("エラー", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -61,6 +69,44 @@ private struct HomeContentView: View {
             Text(viewModel.errorMessage ?? "")
         }
     }
+
+    // MARK: コンディションセクション
+
+    private var conditionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("コンディション")
+                    .font(.headline)
+                Spacer()
+                Button(viewModel.todayCondition == nil ? "記録する" : "編集") {
+                    showingCondition = true
+                }
+                .font(.subheadline)
+                .foregroundStyle(.blue)
+            }
+
+            if let condition = viewModel.todayCondition {
+                ConditionCardView(condition: condition)
+                    .onTapGesture { showingCondition = true }
+            } else {
+                Button {
+                    showingCondition = true
+                } label: {
+                    HStack {
+                        Image(systemName: "plus.circle")
+                        Text("今日のコンディションを記録")
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .foregroundStyle(.blue)
+                }
+            }
+        }
+    }
+
+    // MARK: トレーニングセクション
 
     private var todaySection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -91,6 +137,8 @@ private struct HomeContentView: View {
         }
     }
 
+    // MARK: 統計セクション
+
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("今週の実績")
@@ -113,6 +161,8 @@ private struct HomeContentView: View {
             }
         }
     }
+
+    // MARK: 最近の記録
 
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -137,5 +187,8 @@ private struct HomeContentView: View {
 
 #Preview {
     HomeView()
-        .modelContainer(for: [WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self], inMemory: true)
+        .modelContainer(
+            for: [WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, DailyCondition.self],
+            inMemory: true
+        )
 }

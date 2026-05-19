@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class HomeViewModel {
     var todaySession: WorkoutSession?
+    var todayCondition: DailyCondition?
     var recentSessions: [WorkoutSession] = []
     var isLoading = false
     var errorMessage: String?
@@ -22,6 +23,7 @@ final class HomeViewModel {
         defer { isLoading = false }
         do {
             todaySession = try repository.fetchSession(for: .now)
+            todayCondition = try repository.fetchCondition(for: .now)
             let all = try repository.fetchSessions()
             recentSessions = Array(all.prefix(5))
         } catch {
