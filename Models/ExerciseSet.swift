@@ -7,6 +7,7 @@ final class ExerciseSet {
     var setNumber: Int
     var weight: Double
     var reps: Int
+    var isCompleted: Bool
 
     var exercise: WorkoutExercise?
 
@@ -15,6 +16,7 @@ final class ExerciseSet {
         self.setNumber = setNumber
         self.weight = weight
         self.reps = reps
+        self.isCompleted = false
     }
 
     var volume: Double {

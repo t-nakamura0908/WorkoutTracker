@@ -7,17 +7,19 @@ final class WorkoutExercise {
     var name: String
     var order: Int
     var memo: String
+    var defaultIntervalSeconds: Int
 
     var session: WorkoutSession?
 
     @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.exercise)
     var sets: [ExerciseSet]
 
-    init(name: String, order: Int = 0, memo: String = "") {
+    init(name: String, order: Int = 0, memo: String = "", defaultIntervalSeconds: Int = 90) {
         self.id = UUID()
         self.name = name
         self.order = order
         self.memo = memo
+        self.defaultIntervalSeconds = defaultIntervalSeconds
         self.sets = []
     }
 
