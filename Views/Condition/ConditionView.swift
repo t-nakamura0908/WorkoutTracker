@@ -44,13 +44,25 @@ struct ConditionView: View {
         .onAppear {
             let repo = WorkoutRepository(modelContext: modelContext)
             let condition = existingCondition ?? DailyCondition(date: .now)
-            viewModel = ConditionViewModel(condition: condition, repository: repo, isNew: existingCondition == nil)
+            viewModel = ConditionViewModel(
+                condition: condition,
+                repository: repo,
+                isNew: existingCondition == nil
+            )
         }
     }
 }
 
+// MARK: - ConditionFormView
+
 private struct ConditionFormView: View {
     @Bindable var viewModel: ConditionViewModel
+
+    // フォーカス管理
+    enum Field: Hashable {
+        case bodyWeight, bodyFat, protein, notes
+    }
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         List {
@@ -84,19 +96,25 @@ private struct ConditionFormView: View {
                     title: "体重",
                     unit: "kg",
                     icon: "scalemass.fill",
-                    value: $viewModel.condition.bodyWeight
+                    value: $viewModel.condition.bodyWeight,
+                    field: .bodyWeight,
+                    next: .bodyFat
                 )
                 numberRow(
                     title: "体脂肪率",
                     unit: "%",
                     icon: "percent",
-                    value: $viewModel.condition.bodyFatPercentage
+                    value: $viewModel.condition.bodyFatPercentage,
+                    field: .bodyFat,
+                    next: .protein
                 )
                 numberRow(
                     title: "タンパク質摂取量",
                     unit: "g",
                     icon: "fork.knife",
-                    value: $viewModel.condition.proteinIntake
+                    value: $viewModel.condition.proteinIntake,
+                    field: .protein,
+                    next: .notes
                 )
             }
 
@@ -104,6 +122,19 @@ private struct ConditionFormView: View {
             Section("メモ") {
                 TextField("体調や食事の詳細など", text: $viewModel.condition.notes, axis: .vertical)
                     .lineLimit(3...6)
+                    .focused($focusedField, equals: .notes)
+                    .submitLabel(.done)
+                    .onSubmit { focusedField = nil }
+            }
+        }
+        // スクロールでキーボードを閉じる
+        .scrollDismissesKeyboard(.interactively)
+        // キーボードツールバー（「完了」ボタン）
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完了") { focusedField = nil }
+                    .fontWeight(.semibold)
             }
         }
         .alert("エラー", isPresented: Binding(
@@ -116,21 +147,42 @@ private struct ConditionFormView: View {
         }
     }
 
-    private func numberRow(title: String, unit: String, icon: String, value: Binding<Double>) -> some View {
-        HStack {
+    // MARK: 数値入力行
+
+    private func numberRow(
+        title: String,
+        unit: String,
+        icon: String,
+        value: Binding<Double>,
+        field: Field,
+        next: Field
+    ) -> some View {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(focusedField == field ? .blue : .secondary)
                 .frame(width: 20)
+                .animation(.easeInOut(duration: 0.15), value: focusedField)
+
             Text(title)
+
             Spacer()
-            TextField("0", value: value, format: .number)
+
+            // 0 の場合は空文字として表示し、入力しやすくする
+            TextField("未入力", value: value, format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 80)
+                .focused($focusedField, equals: field)
+                .submitLabel(.next)
+                .onSubmit { focusedField = next }
+
             Text(unit)
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
         }
+        // 行タップでフォーカス
+        .contentShape(Rectangle())
+        .onTapGesture { focusedField = field }
     }
 }
 

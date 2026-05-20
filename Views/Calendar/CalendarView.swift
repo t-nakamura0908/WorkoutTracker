@@ -7,8 +7,7 @@ struct CalendarView: View {
     @State private var viewModel: CalendarViewModel?
     let historyViewModel: HistoryViewModel
     @State private var selectedSession: WorkoutSession?
-
-    private let weekdaySymbols = Calendar.current.shortWeekdaySymbols
+    @State private var showingCondition = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +16,8 @@ struct CalendarView: View {
                     CalendarContentView(
                         viewModel: vm,
                         historyViewModel: historyViewModel,
-                        selectedSession: $selectedSession
+                        selectedSession: $selectedSession,
+                        showingCondition: $showingCondition
                     )
                 } else {
                     ProgressView()
@@ -39,16 +39,26 @@ struct CalendarView: View {
         }
         .sheet(item: $selectedSession) { session in
             WorkoutView(session: session)
+                .onDisappear { Task { await viewModel?.loadMonth() } }
+        }
+        .sheet(isPresented: $showingCondition) {
+            if let vm = viewModel {
+                ConditionView(existingCondition: vm.selectedCondition) {
+                    Task { await vm.loadMonth() }
+                }
+            }
         }
     }
 }
+
+// MARK: - CalendarContentView
 
 private struct CalendarContentView: View {
     @Bindable var viewModel: CalendarViewModel
     let historyViewModel: HistoryViewModel
     @Binding var selectedSession: WorkoutSession?
+    @Binding var showingCondition: Bool
 
-    private let columns = Array(repeating: GridItem(.flexible()), count: 7)
     private let weekdaySymbols = ["日", "月", "火", "水", "木", "金", "土"]
 
     var body: some View {
@@ -57,14 +67,8 @@ private struct CalendarContentView: View {
                 monthNavigation
                 weekdayHeader
                 calendarGrid
-                if let session = historyViewModel.sessions(for: viewModel.selectedDate) {
-                    selectedDayDetail(session: session)
-                } else {
-                    Text(viewModel.selectedDate.displayString + " は記録なし")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding()
-                }
+                Divider()
+                selectedDaySection
             }
             .padding()
         }
@@ -72,6 +76,8 @@ private struct CalendarContentView: View {
             Task { await viewModel.loadMonth() }
         }
     }
+
+    // MARK: 月ナビゲーション
 
     private var monthNavigation: some View {
         HStack {
@@ -82,14 +88,10 @@ private struct CalendarContentView: View {
                     .padding(8)
                     .background(.regularMaterial, in: Circle())
             }
-
             Spacer()
-
             Text(viewModel.currentMonth.monthString)
                 .font(.title3.bold())
-
             Spacer()
-
             Button {
                 withAnimation { viewModel.nextMonth() }
             } label: {
@@ -99,6 +101,8 @@ private struct CalendarContentView: View {
             }
         }
     }
+
+    // MARK: 曜日ヘッダー
 
     private var weekdayHeader: some View {
         HStack {
@@ -111,15 +115,19 @@ private struct CalendarContentView: View {
         }
     }
 
+    // MARK: カレンダーグリッド
+
     private var calendarGrid: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
+        let columns = Array(repeating: GridItem(.flexible()), count: 7)
+        return LazyVGrid(columns: columns, spacing: 8) {
             ForEach(Array(viewModel.calendarDays.enumerated()), id: \.offset) { _, date in
                 if let date {
                     CalendarDayCell(
                         date: date,
                         isSelected: date.isSameDay(as: viewModel.selectedDate),
                         isToday: date.isToday,
-                        hasWorkout: viewModel.hasWorkout(on: date)
+                        hasWorkout: viewModel.hasWorkout(on: date),
+                        hasCondition: viewModel.hasCondition(on: date)
                     )
                     .onTapGesture {
                         withAnimation(.spring(response: 0.2)) {
@@ -127,40 +135,114 @@ private struct CalendarContentView: View {
                         }
                     }
                 } else {
-                    Color.clear
-                        .frame(height: 44)
+                    Color.clear.frame(height: 48)
                 }
             }
         }
     }
 
-    private func selectedDayDetail(session: WorkoutSession) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(viewModel.selectedDate.displayString)
-                .font(.headline)
+    // MARK: 凡例
 
-            WorkoutCardView(session: session)
-                .onTapGesture {
-                    selectedSession = session
-                }
+    private var legend: some View {
+        HStack(spacing: 16) {
+            legendItem(color: .blue, label: "トレーニング")
+            legendItem(color: .green, label: "コンディション")
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func legendItem(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(label)
         }
     }
+
+    // MARK: 選択日の詳細
+
+    private var selectedDaySection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(viewModel.selectedDate.displayString)
+                    .font(.headline)
+                Spacer()
+                legend
+            }
+
+            // トレーニング記録
+            if let session = historyViewModel.sessions(for: viewModel.selectedDate) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("トレーニング", systemImage: "dumbbell.fill")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.blue)
+                    WorkoutCardView(session: session)
+                        .onTapGesture { selectedSession = session }
+                }
+            } else {
+                emptyRow(icon: "dumbbell", label: "トレーニングの記録なし", color: .blue)
+            }
+
+            // コンディション記録
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Label("コンディション", systemImage: "heart.fill")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button(viewModel.selectedCondition == nil ? "記録する" : "編集") {
+                        showingCondition = true
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.blue)
+                }
+
+                if let condition = viewModel.selectedCondition {
+                    ConditionCardView(condition: condition)
+                        .onTapGesture { showingCondition = true }
+                } else {
+                    Button {
+                        showingCondition = true
+                    } label: {
+                        emptyRow(icon: "heart", label: "コンディションの記録なし", color: .green)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func emptyRow(icon: String, label: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(color.opacity(0.5))
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
 }
+
+// MARK: - CalendarDayCell
 
 private struct CalendarDayCell: View {
     let date: Date
     let isSelected: Bool
     let isToday: Bool
     let hasWorkout: Bool
+    let hasCondition: Bool
 
     var body: some View {
         ZStack {
+            // 背景
             if isSelected {
-                Circle()
-                    .fill(.blue)
+                Circle().fill(.blue)
             } else if isToday {
-                Circle()
-                    .stroke(.blue, lineWidth: 1.5)
+                Circle().stroke(.blue, lineWidth: 1.5)
             }
 
             VStack(spacing: 2) {
@@ -168,13 +250,22 @@ private struct CalendarDayCell: View {
                     .font(.subheadline.bold())
                     .foregroundStyle(isSelected ? .white : .primary)
 
-                if hasWorkout {
-                    Circle()
-                        .fill(isSelected ? .white : .blue)
-                        .frame(width: 4, height: 4)
+                // 記録ドット
+                HStack(spacing: 2) {
+                    if hasWorkout {
+                        Circle()
+                            .fill(isSelected ? .white : .blue)
+                            .frame(width: 4, height: 4)
+                    }
+                    if hasCondition {
+                        Circle()
+                            .fill(isSelected ? .white.opacity(0.85) : .green)
+                            .frame(width: 4, height: 4)
+                    }
                 }
+                .frame(height: 6)
             }
         }
-        .frame(height: 44)
+        .frame(height: 48)
     }
 }
