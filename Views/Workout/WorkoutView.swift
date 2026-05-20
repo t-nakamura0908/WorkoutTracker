@@ -8,6 +8,8 @@ struct WorkoutView: View {
     @State private var viewModel: WorkoutViewModel?
     @State private var showingTemplates = false
     @State private var showingCancelConfirmation = false
+    /// 保存ボタン経由で閉じた場合のみ true。false のまま閉じた場合はキャンセル扱い。
+    @State private var didSave = false
 
     var body: some View {
         NavigationStack {
@@ -18,22 +20,25 @@ struct WorkoutView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle(session.date.isToday ? "今日のトレーニング" : session.date.displayString)
+            .navigationTitle(session.date.isToday ? "今日" : session.date.displayString)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // キャンセル
+                // ❌ キャンセル
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("キャンセル", role: .cancel) {
+                    Button {
                         if let vm = viewModel, !vm.session.exercises.isEmpty {
                             showingCancelConfirmation = true
                         } else {
                             viewModel?.cancel(context: modelContext)
                             dismiss()
                         }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .fontWeight(.medium)
                     }
                 }
-                // 保存 + 種目追加メニュー
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                // 種目追加メニュー
+                ToolbarItem(placement: .topBarTrailing) {
                     if let vm = viewModel {
                         Menu {
                             Button {
@@ -49,8 +54,13 @@ struct WorkoutView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
-
+                    }
+                }
+                // 保存
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let vm = viewModel {
                         Button("保存") {
+                            didSave = true
                             vm.save(context: modelContext)
                             dismiss()
                         }
@@ -62,6 +72,12 @@ struct WorkoutView: View {
         .onAppear {
             let repo = WorkoutRepository(modelContext: modelContext)
             viewModel = WorkoutViewModel(session: session, repository: repo)
+        }
+        // スワイプ含め、保存以外の方法で閉じた場合はロールバック
+        .onDisappear {
+            if !didSave {
+                viewModel?.cancel(context: modelContext)
+            }
         }
         .sheet(isPresented: $showingTemplates) {
             NavigationStack {
