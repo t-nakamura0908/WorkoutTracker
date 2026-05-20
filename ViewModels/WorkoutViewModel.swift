@@ -8,6 +8,8 @@ final class WorkoutViewModel {
     var showingAddExercise = false
     var errorMessage: String?
     var isSaving = false
+    /// 開いてから一度でも変更があった場合 true。キャンセル確認の表示判定に使用。
+    var isDirty = false
 
     // インターバルタイマー
     var intervalRemainingSeconds: Int = 0
@@ -26,6 +28,7 @@ final class WorkoutViewModel {
     // MARK: - Exercise / Set 操作
 
     func addExercise(name: String, context: ModelContext) {
+        isDirty = true
         let order = session.exercises.count
         let exercise = WorkoutExercise(name: name, order: order)
         exercise.session = session
@@ -35,6 +38,7 @@ final class WorkoutViewModel {
     }
 
     func deleteExercise(_ exercise: WorkoutExercise, context: ModelContext) {
+        isDirty = true
         session.exercises.removeAll { $0.id == exercise.id }
         context.delete(exercise)
         saveContext(context)
@@ -42,6 +46,7 @@ final class WorkoutViewModel {
     }
 
     func addSet(to exercise: WorkoutExercise, context: ModelContext) {
+        isDirty = true
         let setNumber = exercise.sets.count + 1
         let lastSet = exercise.sortedSets.last
         let newSet = ExerciseSet(
@@ -56,6 +61,7 @@ final class WorkoutViewModel {
     }
 
     func deleteSet(_ set: ExerciseSet, from exercise: WorkoutExercise, context: ModelContext) {
+        isDirty = true
         exercise.sets.removeAll { $0.id == set.id }
         context.delete(set)
         saveContext(context)
@@ -64,6 +70,7 @@ final class WorkoutViewModel {
     }
 
     func updateNotes(_ notes: String, context: ModelContext) {
+        isDirty = true
         session.notes = notes
         saveContext(context)
     }
@@ -71,6 +78,7 @@ final class WorkoutViewModel {
     // MARK: - テンプレート適用
 
     func applyTemplate(_ template: WorkoutTemplate, context: ModelContext) {
+        isDirty = true
         for templateExercise in template.sortedExercises {
             let exercise = WorkoutExercise(
                 name: templateExercise.name,
@@ -98,12 +106,14 @@ final class WorkoutViewModel {
     // MARK: - セット完了 + インターバル開始
 
     func completeSet(_ set: ExerciseSet, exercise: WorkoutExercise, context: ModelContext) {
+        isDirty = true
         set.isCompleted = true
         saveContext(context)
         startInterval(seconds: exercise.defaultIntervalSeconds)
     }
 
     func uncompleteSet(_ set: ExerciseSet, context: ModelContext) {
+        isDirty = true
         set.isCompleted = false
         saveContext(context)
     }

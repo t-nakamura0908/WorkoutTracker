@@ -11,10 +11,9 @@ struct WorkoutView: View {
     /// 保存ボタン経由で閉じた場合のみ true。false のまま閉じた場合はキャンセル扱い。
     @State private var didSave = false
 
-    /// 種目が存在する場合はスワイプで閉じられないようにする
+    /// 変更がある場合はスワイプで閉じられないようにする（❌ボタン経由の確認ダイアログへ誘導）
     private var hasUnsavedChanges: Bool {
-        guard let vm = viewModel else { return false }
-        return !vm.session.exercises.isEmpty && !didSave
+        viewModel?.isDirty == true && !didSave
     }
 
     var body: some View {
@@ -32,9 +31,11 @@ struct WorkoutView: View {
                 // ❌ キャンセル
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        if let vm = viewModel, !vm.session.exercises.isEmpty {
+                        if viewModel?.isDirty == true {
+                            // 変更あり → 確認ダイアログ
                             showingCancelConfirmation = true
                         } else {
+                            // 変更なし → 即キャンセル
                             viewModel?.cancel(context: modelContext)
                             dismiss()
                         }
@@ -108,7 +109,7 @@ struct WorkoutView: View {
             }
             Button("続ける", role: .cancel) {}
         } message: {
-            Text("記録した内容はすべて削除されます")
+            Text("変更内容は保存されません")
         }
     }
 }

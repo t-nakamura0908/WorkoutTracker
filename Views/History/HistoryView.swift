@@ -42,11 +42,10 @@ struct HistoryView: View {
                 CalendarView(historyViewModel: vm)
             }
         }
-        .sheet(item: $selectedSession) { session in
+        .sheet(item: $selectedSession, onDismiss: {
+            Task { await viewModel?.loadData() }
+        }) { session in
             WorkoutView(session: session)
-                .onDisappear {
-                    Task { await viewModel?.loadData() }
-                }
         }
     }
 }

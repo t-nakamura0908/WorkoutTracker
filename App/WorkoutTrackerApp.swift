@@ -10,6 +10,9 @@ struct WorkoutTrackerApp: App {
         WindowGroup {
             ContentView()
                 .onAppear {
+                    // autosave を無効化: 明示的な context.save() のみ永続化させる。
+                    // これにより cancel → context.rollback() が確実に機能する。
+                    sharedModelContainer.mainContext.autosaveEnabled = false
                     NotificationManager.shared.requestAuthorization()
                 }
         }
