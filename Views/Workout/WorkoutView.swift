@@ -11,6 +11,12 @@ struct WorkoutView: View {
     /// 保存ボタン経由で閉じた場合のみ true。false のまま閉じた場合はキャンセル扱い。
     @State private var didSave = false
 
+    /// 種目が存在する場合はスワイプで閉じられないようにする
+    private var hasUnsavedChanges: Bool {
+        guard let vm = viewModel else { return false }
+        return !vm.session.exercises.isEmpty && !didSave
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -69,11 +75,13 @@ struct WorkoutView: View {
                 }
             }
         }
+        // 種目がある場合はスワイプ閉じを無効化（❌ボタンから確認ダイアログ経由で閉じる）
+        .interactiveDismissDisabled(hasUnsavedChanges)
         .onAppear {
             let repo = WorkoutRepository(modelContext: modelContext)
             viewModel = WorkoutViewModel(session: session, repository: repo)
         }
-        // スワイプ含め、保存以外の方法で閉じた場合はロールバック
+        // 保存以外の方法で閉じた場合はロールバック（onDisappear は rollback の確実な実行タイミング）
         .onDisappear {
             if !didSave {
                 viewModel?.cancel(context: modelContext)

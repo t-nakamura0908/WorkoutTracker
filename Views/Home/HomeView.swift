@@ -29,10 +29,12 @@ struct HomeView: View {
             viewModel = vm
             await vm.loadData()
         }
-        .sheet(isPresented: $showingWorkout) {
+        // onDismiss は sheet が完全に閉じた後（WorkoutView の onDisappear → rollback の後）に呼ばれる
+        .sheet(isPresented: $showingWorkout, onDismiss: {
+            Task { await viewModel?.loadData() }
+        }) {
             if let session = viewModel?.todaySession {
                 WorkoutView(session: session)
-                    .onDisappear { Task { await viewModel?.loadData() } }
             }
         }
         .sheet(isPresented: $showingCondition) {
