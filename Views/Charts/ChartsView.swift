@@ -2,6 +2,8 @@ import SwiftUI
 import Charts
 import SwiftData
 
+// MARK: - ChartsView
+
 struct ChartsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: ChartsViewModel?
@@ -27,39 +29,22 @@ struct ChartsView: View {
     }
 }
 
+// MARK: - ChartsContentView
+
 private struct ChartsContentView: View {
     @Bindable var viewModel: ChartsViewModel
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                Picker("チャート", selection: $viewModel.selectedChartTab) {
-                    Text("重量").tag(0)
-                    Text("回数").tag(1)
-                    Text("月別").tag(2)
-                    Text("体重").tag(3)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-
-                switch viewModel.selectedChartTab {
-                case 0:
-                    exercisePicker
-                    weightChart
-                case 1:
-                    exercisePicker
-                    repsChart
-                case 2:
-                    monthlyChart
-                default:
-                    bodyWeightChart
-                }
+            VStack(spacing: 20) {
+                summarySection
+                periodPicker
+                tabSelector
+                chartContent
             }
             .padding(.vertical)
         }
-        .refreshable {
-            await viewModel.loadInitialData()
-        }
+        .refreshable { await viewModel.loadInitialData() }
         .alert("エラー", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -70,38 +55,212 @@ private struct ChartsContentView: View {
         }
     }
 
-    private var exercisePicker: some View {
+    // MARK: サマリーカード
+
+    private var summarySection: some View {
+        HStack(spacing: 10) {
+            SummaryCard(
+                title: "今月の最高重量",
+                value: viewModel.monthlyPRWeight > 0
+                    ? String(format: "%.1f", viewModel.monthlyPRWeight)
+                    : "−",
+                unit: "kg",
+                icon: "trophy.fill",
+                color: .yellow
+            )
+            SummaryCard(
+                title: "今月の総回数",
+                value: viewModel.monthlyTotalReps > 0
+                    ? "\(viewModel.monthlyTotalReps)"
+                    : "−",
+                unit: "回",
+                icon: "repeat",
+                color: .green
+            )
+            SummaryCard(
+                title: "継続記録",
+                value: "\(viewModel.currentStreak)",
+                unit: "日",
+                icon: "flame.fill",
+                color: .orange
+            )
+        }
+        .padding(.horizontal)
+    }
+
+    // MARK: 期間ピッカー
+
+    private var periodPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(viewModel.exerciseNames, id: \.self) { name in
-                    Button(name) {
-                        viewModel.selectedExerciseName = name
-                        Task { await viewModel.loadExerciseData(name: name) }
+            HStack(spacing: 6) {
+                ForEach(ChartPeriod.allCases) { period in
+                    Button(period.rawValue) {
+                        withAnimation(.spring(response: 0.3)) {
+                            viewModel.selectedPeriod = period
+                        }
                     }
-                    .font(.subheadline)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .font(.subheadline.bold())
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
                     .background(
-                        viewModel.selectedExerciseName == name ? Color.blue : Color.secondary.opacity(0.15),
+                        viewModel.selectedPeriod == period
+                            ? Color.blue
+                            : Color.secondary.opacity(0.15),
                         in: Capsule()
                     )
-                    .foregroundStyle(viewModel.selectedExerciseName == name ? .white : .primary)
+                    .foregroundStyle(
+                        viewModel.selectedPeriod == period ? .white : .primary
+                    )
+                    .animation(.spring(response: 0.2), value: viewModel.selectedPeriod)
                 }
             }
             .padding(.horizontal)
         }
     }
 
-    private var weightChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(viewModel.selectedExerciseName) 最大重量推移")
-                .font(.headline)
-                .padding(.horizontal)
+    // MARK: タブセレクター
 
-            if viewModel.weightData.isEmpty {
-                chartEmptyView
+    private var tabSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ChartTab.allCases) { tab in
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            viewModel.selectedTab = tab
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: tab.icon)
+                                .font(.caption)
+                            Text(tab.rawValue)
+                                .font(.subheadline.bold())
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            viewModel.selectedTab == tab
+                                ? Color.blue
+                                : Color.secondary.opacity(0.15),
+                            in: RoundedRectangle(cornerRadius: 10)
+                        )
+                        .foregroundStyle(
+                            viewModel.selectedTab == tab ? .white : .primary
+                        )
+                    }
+                    .animation(.spring(response: 0.2), value: viewModel.selectedTab)
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    // MARK: チャート本体
+
+    @ViewBuilder
+    private var chartContent: some View {
+        switch viewModel.selectedTab {
+        case .weight:
+            exercisePickerMenu
+            WeightChartCard(data: viewModel.weightData, exerciseName: viewModel.selectedExerciseName)
+        case .oneRM:
+            exercisePickerMenu
+            OneRMChartCard(data: viewModel.oneRMData, exerciseName: viewModel.selectedExerciseName)
+        case .reps:
+            exercisePickerMenu
+            RepsChartCard(data: viewModel.repsData, exerciseName: viewModel.selectedExerciseName)
+        case .monthly:
+            MonthlyChartCard(data: viewModel.monthlyCountData)
+        case .body:
+            BodyCompositionCard(
+                weightData: viewModel.bodyWeightData,
+                fatData: viewModel.bodyFatData
+            )
+        case .muscle:
+            MuscleGroupCard(
+                data: viewModel.muscleGroupData,
+                total: viewModel.totalMuscleVolume
+            )
+        }
+    }
+
+    // MARK: 種目ドロップダウン（Menu）
+
+    private var exercisePickerMenu: some View {
+        Menu {
+            ForEach(viewModel.exerciseNames, id: \.self) { name in
+                Button(name) {
+                    viewModel.selectedExerciseName = name
+                }
+            }
+        } label: {
+            HStack {
+                Image(systemName: "dumbbell.fill")
+                    .font(.subheadline)
+                Text(viewModel.selectedExerciseName.isEmpty ? "種目を選択" : viewModel.selectedExerciseName)
+                    .font(.subheadline.bold())
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .foregroundStyle(.primary)
+            .padding(.horizontal)
+        }
+    }
+}
+
+// MARK: - SummaryCard
+
+private struct SummaryCard: View {
+    let title: String
+    let value: String
+    let unit: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(color)
+
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.title3.bold())
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                Text(unit)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - WeightChartCard
+
+private struct WeightChartCard: View {
+    let data: [ChartDataPoint]
+    let exerciseName: String
+
+    var body: some View {
+        ChartCard(title: "\(exerciseName) 最大重量推移", yLabel: "kg") {
+            if data.isEmpty {
+                ChartEmptyView()
             } else {
-                Chart(viewModel.weightData) { point in
+                Chart(data) { point in
                     LineMark(
                         x: .value("日付", point.date),
                         y: .value("重量", point.value)
@@ -109,33 +268,91 @@ private struct ChartsContentView: View {
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(.blue)
 
+                    AreaMark(
+                        x: .value("日付", point.date),
+                        y: .value("重量", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.blue.opacity(0.08))
+
                     PointMark(
                         x: .value("日付", point.date),
                         y: .value("重量", point.value)
                     )
-                    .foregroundStyle(.blue)
-                    .symbolSize(60)
+                    .foregroundStyle(point.isPR ? .yellow : .blue)
+                    .symbolSize(point.isPR ? 100 : 50)
+                    .annotation(position: .top) {
+                        if point.isPR {
+                            PRBadge()
+                        }
+                    }
                 }
-                .frame(height: 220)
-                .chartYAxisLabel("kg")
-                .padding(.horizontal)
+                .chartYScale(domain: .automatic(includesZero: false))
             }
         }
-        .padding(.vertical)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
     }
+}
 
-    private var repsChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(viewModel.selectedExerciseName) 総回数推移")
-                .font(.headline)
-                .padding(.horizontal)
+// MARK: - OneRMChartCard
 
-            if viewModel.repsData.isEmpty {
-                chartEmptyView
+private struct OneRMChartCard: View {
+    let data: [ChartDataPoint]
+    let exerciseName: String
+
+    var body: some View {
+        ChartCard(title: "\(exerciseName) 推定1RM推移", yLabel: "kg") {
+            if data.isEmpty {
+                ChartEmptyView()
             } else {
-                Chart(viewModel.repsData) { point in
+                Chart(data) { point in
+                    LineMark(
+                        x: .value("日付", point.date),
+                        y: .value("1RM", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.purple)
+
+                    AreaMark(
+                        x: .value("日付", point.date),
+                        y: .value("1RM", point.value)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(.purple.opacity(0.08))
+
+                    PointMark(
+                        x: .value("日付", point.date),
+                        y: .value("1RM", point.value)
+                    )
+                    .foregroundStyle(point.isPR ? .yellow : .purple)
+                    .symbolSize(point.isPR ? 100 : 50)
+                    .annotation(position: .top) {
+                        if point.isPR {
+                            PRBadge()
+                        }
+                    }
+                }
+                .chartYScale(domain: .automatic(includesZero: false))
+            }
+        } footer: {
+            Text("エプリー式: 重量 × (1 + 回数 ÷ 30) で算出")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - RepsChartCard
+
+private struct RepsChartCard: View {
+    let data: [ChartDataPoint]
+    let exerciseName: String
+
+    var body: some View {
+        ChartCard(title: "\(exerciseName) 総回数推移", yLabel: "回") {
+            if data.isEmpty {
+                ChartEmptyView()
+            } else {
+                Chart(data) { point in
                     BarMark(
                         x: .value("日付", point.date),
                         y: .value("回数", point.value)
@@ -143,100 +360,266 @@ private struct ChartsContentView: View {
                     .foregroundStyle(.green.gradient)
                     .cornerRadius(4)
                 }
-                .frame(height: 220)
-                .chartYAxisLabel("回")
-                .padding(.horizontal)
             }
         }
-        .padding(.vertical)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
     }
+}
 
-    private var monthlyChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("月別トレーニング回数")
-                .font(.headline)
-                .padding(.horizontal)
+// MARK: - MonthlyChartCard
 
-            if viewModel.monthlyCountData.isEmpty {
-                chartEmptyView
+private struct MonthlyChartCard: View {
+    let data: [ChartDataPoint]
+
+    var body: some View {
+        ChartCard(title: "月別トレーニング回数", yLabel: "回") {
+            if data.isEmpty {
+                ChartEmptyView()
             } else {
-                Chart(viewModel.monthlyCountData) { point in
+                Chart(data) { point in
                     BarMark(
                         x: .value("月", point.date, unit: .month),
                         y: .value("回数", point.value)
                     )
                     .foregroundStyle(.orange.gradient)
                     .cornerRadius(4)
-                }
-                .frame(height: 220)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .month)) { value in
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).locale(Locale(identifier: "ja_JP")))
+                    .annotation(position: .top) {
+                        Text("\(Int(point.value))")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .chartYAxisLabel("回")
-                .padding(.horizontal)
-            }
-        }
-        .padding(.vertical)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
-    }
-
-    private var bodyWeightChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("体重推移")
-                .font(.headline)
-                .padding(.horizontal)
-
-            if viewModel.bodyWeightData.isEmpty {
-                chartEmptyView
-            } else {
-                Chart(viewModel.bodyWeightData) { point in
-                    LineMark(
-                        x: .value("日付", point.date),
-                        y: .value("体重", point.value)
-                    )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.purple)
-
-                    AreaMark(
-                        x: .value("日付", point.date),
-                        y: .value("体重", point.value)
-                    )
-                    .interpolationMethod(.catmullRom)
-                    .foregroundStyle(.purple.opacity(0.1))
-
-                    PointMark(
-                        x: .value("日付", point.date),
-                        y: .value("体重", point.value)
-                    )
-                    .foregroundStyle(.purple)
-                    .symbolSize(50)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .month)) {
+                        AxisValueLabel(
+                            format: .dateTime
+                                .month(.abbreviated)
+                                .locale(Locale(identifier: "ja_JP"))
+                        )
+                    }
                 }
-                .frame(height: 220)
-                .chartYAxisLabel("kg")
-                .chartYScale(domain: .automatic(includesZero: false))
-                .padding(.horizontal)
             }
         }
-        .padding(.vertical)
+    }
+}
+
+// MARK: - BodyCompositionCard
+
+private struct BodyCompositionCard: View {
+    let weightData: [ChartDataPoint]
+    let fatData: [ChartDataPoint]
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // 体重グラフ
+            ChartCard(title: "体重推移", yLabel: "kg") {
+                if weightData.isEmpty {
+                    ChartEmptyView()
+                } else {
+                    Chart(weightData) { point in
+                        LineMark(
+                            x: .value("日付", point.date),
+                            y: .value("体重", point.value)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.blue)
+
+                        AreaMark(
+                            x: .value("日付", point.date),
+                            y: .value("体重", point.value)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.blue.opacity(0.08))
+
+                        PointMark(
+                            x: .value("日付", point.date),
+                            y: .value("体重", point.value)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(45)
+                    }
+                    .chartYScale(domain: .automatic(includesZero: false))
+                }
+            }
+
+            // 体脂肪率グラフ
+            ChartCard(title: "体脂肪率推移", yLabel: "%") {
+                if fatData.isEmpty {
+                    ChartEmptyView()
+                } else {
+                    Chart(fatData) { point in
+                        LineMark(
+                            x: .value("日付", point.date),
+                            y: .value("体脂肪率", point.value)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.red)
+
+                        AreaMark(
+                            x: .value("日付", point.date),
+                            y: .value("体脂肪率", point.value)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.red.opacity(0.08))
+
+                        PointMark(
+                            x: .value("日付", point.date),
+                            y: .value("体脂肪率", point.value)
+                        )
+                        .foregroundStyle(.red)
+                        .symbolSize(45)
+                    }
+                    .chartYScale(domain: .automatic(includesZero: false))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - MuscleGroupCard
+
+private struct MuscleGroupCard: View {
+    let data: [MuscleGroupVolume]
+    let total: Double
+
+    var body: some View {
+        VStack(spacing: 12) {
+            // ドーナツチャート
+            ChartCard(title: "筋群別ボリューム内訳", yLabel: "") {
+                if data.isEmpty {
+                    ChartEmptyView()
+                } else {
+                    HStack(spacing: 20) {
+                        Chart(data) { group in
+                            SectorMark(
+                                angle: .value("ボリューム", group.volume),
+                                innerRadius: .ratio(0.55),
+                                angularInset: 2
+                            )
+                            .foregroundStyle(group.color)
+                            .cornerRadius(4)
+                        }
+                        .frame(height: 180)
+
+                        // 凡例
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(data) { group in
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(group.color)
+                                        .frame(width: 10, height: 10)
+                                    Text(group.name)
+                                        .font(.caption)
+                                    Spacer()
+                                    Text(total > 0
+                                         ? "\(Int(group.volume / total * 100))%"
+                                         : "0%")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: 120)
+                    }
+                    .padding(.horizontal, 4)
+                }
+            }
+
+            // 積み上げ棒グラフ（ボリューム量）
+            ChartCard(title: "筋群別ボリューム量", yLabel: "kg") {
+                if data.isEmpty {
+                    ChartEmptyView()
+                } else {
+                    Chart(data) { group in
+                        BarMark(
+                            x: .value("ボリューム", group.volume),
+                            y: .value("筋群", group.name)
+                        )
+                        .foregroundStyle(group.color)
+                        .cornerRadius(4)
+                        .annotation(position: .trailing) {
+                            Text(String(format: "%.0f", group.volume))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .chartXAxisLabel("kg")
+                    .frame(height: CGFloat(data.count * 44))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 共通部品
+
+private struct ChartCard<Content: View, Footer: View>: View {
+    let title: String
+    let yLabel: String
+    @ViewBuilder let content: () -> Content
+    @ViewBuilder var footer: () -> Footer
+
+    init(
+        title: String,
+        yLabel: String,
+        @ViewBuilder content: @escaping () -> Content,
+        @ViewBuilder footer: @escaping () -> Footer = { EmptyView() }
+    ) {
+        self.title = title
+        self.yLabel = yLabel
+        self.content = content
+        self.footer = footer
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+
+            content()
+                .frame(minHeight: 180)
+                .if(!yLabel.isEmpty) { view in
+                    view.chartYAxisLabel(yLabel)
+                }
+
+            footer()
+        }
+        .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         .padding(.horizontal)
     }
+}
 
-    private var chartEmptyView: some View {
+private struct ChartEmptyView: View {
+    var body: some View {
         Text("データがありません")
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 220)
+            .frame(maxWidth: .infinity, minHeight: 120)
+    }
+}
+
+private struct PRBadge: View {
+    var body: some View {
+        Image(systemName: "trophy.fill")
+            .font(.caption)
+            .foregroundStyle(.yellow)
+            .shadow(color: .orange.opacity(0.4), radius: 2)
+    }
+}
+
+// MARK: - View Extension
+
+extension View {
+    @ViewBuilder
+    func `if`<Transform: View>(_ condition: Bool, transform: (Self) -> Transform) -> some View {
+        if condition { transform(self) } else { self }
     }
 }
 
 #Preview {
     ChartsView()
-        .modelContainer(for: [WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self], inMemory: true)
+        .modelContainer(
+            for: [WorkoutSession.self, WorkoutExercise.self, ExerciseSet.self, DailyCondition.self],
+            inMemory: true
+        )
 }
