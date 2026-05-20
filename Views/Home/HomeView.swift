@@ -158,6 +158,13 @@ private struct HomeContentView: View {
                     icon: "scalemass.fill",
                     color: .blue
                 )
+                StatCardView(
+                    title: "継続記録",
+                    value: "\(viewModel.currentStreak)",
+                    unit: "日",
+                    icon: "trophy.fill",
+                    color: .yellow
+                )
             }
         }
     }

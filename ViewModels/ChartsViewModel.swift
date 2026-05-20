@@ -66,13 +66,6 @@ struct MuscleGroupVolume: Identifiable {
     let color: Color
 }
 
-struct MonthlyExerciseStat: Identifiable {
-    let id = UUID()
-    let name: String
-    let maxWeight: Double
-    let totalReps: Int
-    let sessionCount: Int
-}
 
 // MARK: - ChartsViewModel
 
@@ -100,9 +93,6 @@ final class ChartsViewModel {
     var bodyFatData:    [ChartDataPoint] = []
     var muscleGroupData: [MuscleGroupVolume] = []
 
-    // サマリー統計
-    var monthlyExerciseStats: [MonthlyExerciseStat] = []
-    var currentStreak: Int = 0
 
     var isLoading    = false
     var errorMessage: String?
@@ -154,7 +144,6 @@ final class ChartsViewModel {
             group.addTask { await self.loadMonthlyData() }
             group.addTask { await self.loadBodyData() }
             group.addTask { await self.loadMuscleGroupData() }
-            group.addTask { await self.loadSummaryStats() }
         }
     }
 
@@ -253,48 +242,6 @@ final class ChartsViewModel {
         }
     }
 
-    // MARK: サマリー統計
-
-    @MainActor
-    private func loadSummaryStats() async {
-        do {
-            let sessions = try repository.fetchSessions()
-            let thisMonthSessions = sessions.filter { $0.date >= Date.now.startOfMonth }
-
-            // 種目名でグループ化し、最高重量と総回数を集計
-            var statMap: [String: (maxWeight: Double, totalReps: Int, sessionCount: Int)] = [:]
-            for session in thisMonthSessions {
-                for exercise in session.exercises {
-                    let maxW = exercise.sets.map(\.weight).max() ?? 0
-                    let reps = exercise.sets.reduce(0) { $0 + $1.reps }
-                    if var existing = statMap[exercise.name] {
-                        existing.maxWeight  = max(existing.maxWeight, maxW)
-                        existing.totalReps += reps
-                        existing.sessionCount += 1
-                        statMap[exercise.name] = existing
-                    } else {
-                        statMap[exercise.name] = (maxW, reps, 1)
-                    }
-                }
-            }
-
-            monthlyExerciseStats = statMap
-                .map { name, stat in
-                    MonthlyExerciseStat(
-                        name: name,
-                        maxWeight: stat.maxWeight,
-                        totalReps: stat.totalReps,
-                        sessionCount: stat.sessionCount
-                    )
-                }
-                .sorted { $0.totalReps > $1.totalReps }
-
-            currentStreak = calculateStreak(from: sessions)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     // MARK: - ヘルパー
 
     /// エプリー式: weight × (1 + reps / 30)
@@ -303,25 +250,6 @@ final class ChartsViewModel {
         guard reps > 1 else { return weight }
         let raw = weight * (1.0 + Double(reps) / 30.0)
         return (raw * 10).rounded() / 10
-    }
-
-    private func calculateStreak(from sessions: [WorkoutSession]) -> Int {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        let dateSet = Set(sessions.map { fmt.string(from: $0.date) })
-
-        var streak = 0
-        var check = Date.now
-
-        // 今日に記録がない場合は昨日から数える
-        if !dateSet.contains(fmt.string(from: check)) {
-            check = check.adding(days: -1)
-        }
-        while dateSet.contains(fmt.string(from: check)) {
-            streak += 1
-            check = check.adding(days: -1)
-        }
-        return streak
     }
 
     var totalMuscleVolume: Double {

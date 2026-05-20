@@ -7,6 +7,7 @@ final class HomeViewModel {
     var todaySession: WorkoutSession?
     var todayCondition: DailyCondition?
     var recentSessions: [WorkoutSession] = []
+    var currentStreak: Int = 0
     var isLoading = false
     var errorMessage: String?
     var showingWorkout = false
@@ -26,6 +27,7 @@ final class HomeViewModel {
             todayCondition = try repository.fetchCondition(for: .now)
             let all = try repository.fetchSessions()
             recentSessions = Array(all.prefix(5))
+            currentStreak = Self.calculateStreak(from: all)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -55,5 +57,24 @@ final class HomeViewModel {
 
     var totalVolume: Double {
         recentSessions.prefix(7).reduce(0) { $0 + $1.totalVolume }
+    }
+
+    private static func calculateStreak(from sessions: [WorkoutSession]) -> Int {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        let dateSet = Set(sessions.map { fmt.string(from: $0.date) })
+
+        var streak = 0
+        var check = Date.now
+
+        // 今日に記録がなければ昨日から数える
+        if !dateSet.contains(fmt.string(from: check)) {
+            check = check.adding(days: -1)
+        }
+        while dateSet.contains(fmt.string(from: check)) {
+            streak += 1
+            check = check.adding(days: -1)
+        }
+        return streak
     }
 }

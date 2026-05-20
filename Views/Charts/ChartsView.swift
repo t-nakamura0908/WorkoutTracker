@@ -37,7 +37,6 @@ private struct ChartsContentView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                summarySection
                 periodPicker
                 tabSelector
                 chartContent
@@ -53,16 +52,6 @@ private struct ChartsContentView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
-    }
-
-    // MARK: 今月の種目別実績カード
-
-    private var summarySection: some View {
-        MonthlyHighlightCard(
-            stats: viewModel.monthlyExerciseStats,
-            streak: viewModel.currentStreak
-        )
-        .padding(.horizontal)
     }
 
     // MARK: 期間ピッカー
@@ -186,109 +175,6 @@ private struct ChartsContentView: View {
             .foregroundStyle(.primary)
             .padding(.horizontal)
         }
-    }
-}
-
-// MARK: - MonthlyHighlightCard
-
-private struct MonthlyHighlightCard: View {
-    let stats: [MonthlyExerciseStat]
-    let streak: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-
-            // ヘッダー
-            HStack {
-                Text("今月の実績")
-                    .font(.headline)
-                Spacer()
-                if streak > 0 {
-                    Label("\(streak)日連続", systemImage: "flame.fill")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            if stats.isEmpty {
-                Text("今月のトレーニング記録がありません")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 12)
-            } else {
-                // テーブルヘッダー
-                HStack {
-                    Text("種目")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("最高重量")
-                        .frame(width: 76, alignment: .trailing)
-                    Text("総回数")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 2)
-
-                Divider()
-
-                // 種目行
-                ForEach(stats) { stat in
-                    ExerciseStatRow(stat: stat)
-                    if stat.id != stats.last?.id {
-                        Divider().padding(.leading, 0)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-private struct ExerciseStatRow: View {
-    let stat: MonthlyExerciseStat
-
-    var body: some View {
-        HStack(alignment: .center) {
-            // 種目名 + セッション数バッジ
-            HStack(spacing: 6) {
-                Text(stat.name)
-                    .font(.subheadline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text("\(stat.sessionCount)回")
-                    .font(.caption2.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(.blue.opacity(0.7), in: Capsule())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // 最高重量
-            HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text(stat.maxWeight > 0 ? String(format: "%.1f", stat.maxWeight) : "−")
-                    .font(.subheadline.bold())
-                if stat.maxWeight > 0 {
-                    Text("kg")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 76, alignment: .trailing)
-
-            // 総回数
-            HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text("\(stat.totalReps)")
-                    .font(.subheadline.bold())
-                Text("回")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(width: 60, alignment: .trailing)
-        }
-        .padding(.vertical, 4)
     }
 }
 
