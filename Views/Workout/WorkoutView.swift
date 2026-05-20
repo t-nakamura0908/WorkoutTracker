@@ -7,6 +7,7 @@ struct WorkoutView: View {
     let session: WorkoutSession
     @State private var viewModel: WorkoutViewModel?
     @State private var showingTemplates = false
+    @State private var showingCancelConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -20,10 +21,19 @@ struct WorkoutView: View {
             .navigationTitle(session.date.isToday ? "今日のトレーニング" : session.date.displayString)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // キャンセル
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("閉じる") { dismiss() }
+                    Button("キャンセル", role: .cancel) {
+                        if let vm = viewModel, !vm.session.exercises.isEmpty {
+                            showingCancelConfirmation = true
+                        } else {
+                            viewModel?.cancel(context: modelContext)
+                            dismiss()
+                        }
+                    }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                // 保存 + 種目追加メニュー
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     if let vm = viewModel {
                         Menu {
                             Button {
@@ -39,6 +49,12 @@ struct WorkoutView: View {
                         } label: {
                             Image(systemName: "plus")
                         }
+
+                        Button("保存") {
+                            vm.save(context: modelContext)
+                            dismiss()
+                        }
+                        .fontWeight(.semibold)
                     }
                 }
             }
@@ -56,6 +72,19 @@ struct WorkoutView: View {
                     }
                 }
             }
+        }
+        .confirmationDialog(
+            "変更を破棄しますか？",
+            isPresented: $showingCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("破棄する", role: .destructive) {
+                viewModel?.cancel(context: modelContext)
+                dismiss()
+            }
+            Button("続ける", role: .cancel) {}
+        } message: {
+            Text("記録した内容はすべて削除されます")
         }
     }
 }

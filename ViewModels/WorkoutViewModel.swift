@@ -166,12 +166,25 @@ final class WorkoutViewModel {
         }
     }
 
-    private func saveContext(_ context: ModelContext) {
+    // MARK: - 明示的な保存 / キャンセル
+
+    func save(context: ModelContext) {
         do {
             try context.save()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func cancel(context: ModelContext) {
+        context.rollback()
+    }
+
+    // MARK: - Private helpers
+
+    /// 変更をメモリに蓄積するだけで保存しない（保存は save(context:) で明示的に行う）
+    private func saveContext(_ context: ModelContext) {
+        // no-op: auto-save を行わない
     }
 
     deinit {

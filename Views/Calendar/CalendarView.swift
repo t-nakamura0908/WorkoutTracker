@@ -172,42 +172,31 @@ private struct CalendarContentView: View {
             }
 
             // トレーニング記録
-            if let session = historyViewModel.sessions(for: viewModel.selectedDate) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("トレーニング", systemImage: "dumbbell.fill")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.blue)
+            VStack(alignment: .leading, spacing: 6) {
+                Label("トレーニング", systemImage: "dumbbell.fill")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.blue)
+
+                if let session = historyViewModel.sessions(for: viewModel.selectedDate) {
                     WorkoutCardView(session: session)
-                        .onTapGesture { selectedSession = session }
+                        .tappableCard { selectedSession = session }
+                } else {
+                    emptyRow(icon: "dumbbell", label: "トレーニングの記録なし", color: .blue)
                 }
-            } else {
-                emptyRow(icon: "dumbbell", label: "トレーニングの記録なし", color: .blue)
             }
 
             // コンディション記録
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Label("コンディション", systemImage: "heart.fill")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.green)
-                    Spacer()
-                    Button(viewModel.selectedCondition == nil ? "記録する" : "編集") {
-                        showingCondition = true
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.blue)
-                }
+                Label("コンディション", systemImage: "heart.fill")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.green)
 
                 if let condition = viewModel.selectedCondition {
                     ConditionCardView(condition: condition)
-                        .onTapGesture { showingCondition = true }
+                        .tappableCard { showingCondition = true }
                 } else {
-                    Button {
-                        showingCondition = true
-                    } label: {
-                        emptyRow(icon: "heart", label: "コンディションの記録なし", color: .green)
-                    }
-                    .buttonStyle(.plain)
+                    emptyRow(icon: "heart", label: "タップして記録する", color: .green)
+                        .tappableCard { showingCondition = true }
                 }
             }
         }
@@ -220,8 +209,11 @@ private struct CalendarContentView: View {
             Text(label)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
@@ -267,5 +259,35 @@ private struct CalendarDayCell: View {
             }
         }
         .frame(height: 48)
+    }
+}
+
+// MARK: - tappableCard modifier
+
+private extension View {
+    /// タップエリアを全面に広げ、押下時に軽くスケールするカード用モディファイア
+    func tappableCard(action: @escaping () -> Void) -> some View {
+        TappableCardWrapper(content: self, action: action)
+    }
+}
+
+private struct TappableCardWrapper<Content: View>: View {
+    let content: Content
+    let action: () -> Void
+    @State private var isPressed = false
+
+    var body: some View {
+        content
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .scaleEffect(isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isPressed)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in isPressed = true }
+                    .onEnded { _ in
+                        isPressed = false
+                        action()
+                    }
+            )
     }
 }

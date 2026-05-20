@@ -39,15 +39,11 @@ final class HomeViewModel {
             showingWorkout = true
             return
         }
-        let repo = WorkoutRepository(modelContext: context)
+        // WorkoutView の「保存」ボタンで初めて永続化するため、ここでは insert のみ
         let session = WorkoutSession(date: .now)
-        do {
-            try repo.save(session: session)
-            todaySession = session
-            showingWorkout = true
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        context.insert(session)
+        todaySession = session
+        showingWorkout = true
     }
 
     var weeklyCount: Int {
