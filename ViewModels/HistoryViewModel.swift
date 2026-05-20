@@ -26,6 +26,10 @@ final class HistoryViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
+            // rollback 後の @Observable 通知漏れ対策: 一度空にしてから再代入
+            sessions = []
+            filteredSessions = []
+
             sessions = try repository.fetchSessions()
             exerciseNames = try repository.fetchAllExerciseNames()
             applyFilter()
