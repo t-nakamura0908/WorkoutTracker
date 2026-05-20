@@ -55,36 +55,13 @@ private struct ChartsContentView: View {
         }
     }
 
-    // MARK: サマリーカード
+    // MARK: 今月の種目別実績カード
 
     private var summarySection: some View {
-        HStack(spacing: 10) {
-            SummaryCard(
-                title: "今月の最高重量",
-                value: viewModel.monthlyPRWeight > 0
-                    ? String(format: "%.1f", viewModel.monthlyPRWeight)
-                    : "−",
-                unit: "kg",
-                icon: "trophy.fill",
-                color: .yellow
-            )
-            SummaryCard(
-                title: "今月の総回数",
-                value: viewModel.monthlyTotalReps > 0
-                    ? "\(viewModel.monthlyTotalReps)"
-                    : "−",
-                unit: "回",
-                icon: "repeat",
-                color: .green
-            )
-            SummaryCard(
-                title: "継続記録",
-                value: "\(viewModel.currentStreak)",
-                unit: "日",
-                icon: "flame.fill",
-                color: .orange
-            )
-        }
+        MonthlyHighlightCard(
+            stats: viewModel.monthlyExerciseStats,
+            streak: viewModel.currentStreak
+        )
         .padding(.horizontal)
     }
 
@@ -212,40 +189,106 @@ private struct ChartsContentView: View {
     }
 }
 
-// MARK: - SummaryCard
+// MARK: - MonthlyHighlightCard
 
-private struct SummaryCard: View {
-    let title: String
-    let value: String
-    let unit: String
-    let icon: String
-    let color: Color
+private struct MonthlyHighlightCard: View {
+    let stats: [MonthlyExerciseStat]
+    let streak: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(color)
+        VStack(alignment: .leading, spacing: 12) {
 
-            HStack(alignment: .lastTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(.title3.bold())
-                    .minimumScaleFactor(0.7)
+            // ヘッダー
+            HStack {
+                Text("今月の実績")
+                    .font(.headline)
+                Spacer()
+                if streak > 0 {
+                    Label("\(streak)日連続", systemImage: "flame.fill")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            if stats.isEmpty {
+                Text("今月のトレーニング記録がありません")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 12)
+            } else {
+                // テーブルヘッダー
+                HStack {
+                    Text("種目")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("最高重量")
+                        .frame(width: 76, alignment: .trailing)
+                    Text("総回数")
+                        .frame(width: 60, alignment: .trailing)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 2)
+
+                Divider()
+
+                // 種目行
+                ForEach(stats) { stat in
+                    ExerciseStatRow(stat: stat)
+                    if stat.id != stats.last?.id {
+                        Divider().padding(.leading, 0)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct ExerciseStatRow: View {
+    let stat: MonthlyExerciseStat
+
+    var body: some View {
+        HStack(alignment: .center) {
+            // 種目名 + セッション数バッジ
+            HStack(spacing: 6) {
+                Text(stat.name)
+                    .font(.subheadline)
                     .lineLimit(1)
-                Text(unit)
+                    .minimumScaleFactor(0.85)
+                Text("\(stat.sessionCount)回")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.blue.opacity(0.7), in: Capsule())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // 最高重量
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text(stat.maxWeight > 0 ? String(format: "%.1f", stat.maxWeight) : "−")
+                    .font(.subheadline.bold())
+                if stat.maxWeight > 0 {
+                    Text("kg")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 76, alignment: .trailing)
+
+            // 総回数
+            HStack(alignment: .lastTextBaseline, spacing: 2) {
+                Text("\(stat.totalReps)")
+                    .font(.subheadline.bold())
+                Text("回")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            .frame(width: 60, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, 4)
     }
 }
 

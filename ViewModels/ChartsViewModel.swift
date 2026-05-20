@@ -66,6 +66,14 @@ struct MuscleGroupVolume: Identifiable {
     let color: Color
 }
 
+struct MonthlyExerciseStat: Identifiable {
+    let id = UUID()
+    let name: String
+    let maxWeight: Double
+    let totalReps: Int
+    let sessionCount: Int
+}
+
 // MARK: - ChartsViewModel
 
 @Observable
@@ -93,9 +101,8 @@ final class ChartsViewModel {
     var muscleGroupData: [MuscleGroupVolume] = []
 
     // サマリー統計
-    var monthlyPRWeight: Double = 0
-    var monthlyTotalReps: Int   = 0
-    var currentStreak: Int      = 0
+    var monthlyExerciseStats: [MonthlyExerciseStat] = []
+    var currentStreak: Int = 0
 
     var isLoading    = false
     var errorMessage: String?
@@ -252,15 +259,35 @@ final class ChartsViewModel {
     private func loadSummaryStats() async {
         do {
             let sessions = try repository.fetchSessions()
-            let thisMonth = sessions.filter { $0.date >= Date.now.startOfMonth }
+            let thisMonthSessions = sessions.filter { $0.date >= Date.now.startOfMonth }
 
-            monthlyPRWeight = thisMonth
-                .flatMap(\.exercises).flatMap(\.sets)
-                .map(\.weight).max() ?? 0
+            // 種目名でグループ化し、最高重量と総回数を集計
+            var statMap: [String: (maxWeight: Double, totalReps: Int, sessionCount: Int)] = [:]
+            for session in thisMonthSessions {
+                for exercise in session.exercises {
+                    let maxW = exercise.sets.map(\.weight).max() ?? 0
+                    let reps = exercise.sets.reduce(0) { $0 + $1.reps }
+                    if var existing = statMap[exercise.name] {
+                        existing.maxWeight  = max(existing.maxWeight, maxW)
+                        existing.totalReps += reps
+                        existing.sessionCount += 1
+                        statMap[exercise.name] = existing
+                    } else {
+                        statMap[exercise.name] = (maxW, reps, 1)
+                    }
+                }
+            }
 
-            monthlyTotalReps = thisMonth
-                .flatMap(\.exercises).flatMap(\.sets)
-                .reduce(0) { $0 + $1.reps }
+            monthlyExerciseStats = statMap
+                .map { name, stat in
+                    MonthlyExerciseStat(
+                        name: name,
+                        maxWeight: stat.maxWeight,
+                        totalReps: stat.totalReps,
+                        sessionCount: stat.sessionCount
+                    )
+                }
+                .sorted { $0.totalReps > $1.totalReps }
 
             currentStreak = calculateStreak(from: sessions)
         } catch {
