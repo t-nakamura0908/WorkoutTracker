@@ -45,7 +45,7 @@ struct HistoryView: View {
         .sheet(item: $selectedSession, onDismiss: {
             Task { await viewModel?.loadData() }
         }) { session in
-            WorkoutView(session: session)
+            WorkoutView(sessionDate: session.date)
         }
     }
 }

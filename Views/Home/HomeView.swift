@@ -29,13 +29,12 @@ struct HomeView: View {
             viewModel = vm
             await vm.loadData()
         }
-        // onDismiss は sheet が完全に閉じた後（WorkoutView の onDisappear → rollback の後）に呼ばれる
+        // WorkoutView は内部で専用 context を作成するため session オブジェクトを渡さない。
+        // 保存・キャンセルどちらの場合も onDismiss で DB から再読み込みして表示を同期する。
         .sheet(isPresented: $showingWorkout, onDismiss: {
             Task { await viewModel?.loadData() }
         }) {
-            if let session = viewModel?.todaySession {
-                WorkoutView(session: session)
-            }
+            WorkoutView(sessionDate: .now)
         }
         .sheet(isPresented: $showingCondition) {
             ConditionView(existingCondition: viewModel?.todayCondition) {
@@ -120,10 +119,7 @@ private struct HomeContentView: View {
                     .onTapGesture { showingWorkout = true }
             } else {
                 Button {
-                    Task {
-                        await viewModel.createTodaySession(context: modelContext)
-                        showingWorkout = viewModel.showingWorkout
-                    }
+                    showingWorkout = true
                 } label: {
                     HStack {
                         Image(systemName: "plus.circle.fill")

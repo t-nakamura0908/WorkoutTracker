@@ -2,16 +2,16 @@ import SwiftUI
 import SwiftData
 
 struct WorkoutView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContainer) private var modelContainer
     @Environment(\.dismiss) private var dismiss
-    let session: WorkoutSession
+    /// 編集対象の日付。WorkoutView はこの日付を基に内部で専用 context を作成する。
+    let sessionDate: Date
+    @State private var editContext: ModelContext?
     @State private var viewModel: WorkoutViewModel?
     @State private var showingTemplates = false
     @State private var showingCancelConfirmation = false
-    /// 保存ボタン経由で閉じた場合のみ true。false のまま閉じた場合はキャンセル扱い。
     @State private var didSave = false
 
-    /// 変更がある場合はスワイプで閉じられないようにする（❌ボタン経由の確認ダイアログへ誘導）
     private var hasUnsavedChanges: Bool {
         viewModel?.isDirty == true && !didSave
     }
@@ -19,24 +19,24 @@ struct WorkoutView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let vm = viewModel {
+                if let vm = viewModel, let ctx = editContext {
                     WorkoutContentView(viewModel: vm)
+                        // 編集専用 context を注入することで主 context（HomeView）に
+                        // 変更が漏れず、キャンセル時にも主 context のデータは一切変わらない
+                        .environment(\.modelContext, ctx)
                 } else {
                     ProgressView()
                 }
             }
-            .navigationTitle(session.date.isToday ? "今日" : session.date.displayString)
+            .navigationTitle(sessionDate.isToday ? "今日" : sessionDate.displayString)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // ❌ キャンセル
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         if viewModel?.isDirty == true {
-                            // 変更あり → 確認ダイアログ
                             showingCancelConfirmation = true
                         } else {
-                            // 変更なし → 即キャンセル
-                            viewModel?.cancel(context: modelContext)
                             dismiss()
                         }
                     } label: {
@@ -65,10 +65,10 @@ struct WorkoutView: View {
                 }
                 // 保存
                 ToolbarItem(placement: .topBarTrailing) {
-                    if let vm = viewModel {
+                    if let vm = viewModel, let ctx = editContext {
                         Button("保存") {
                             didSave = true
-                            vm.save(context: modelContext)
+                            vm.save(context: ctx)
                             dismiss()
                         }
                         .fontWeight(.semibold)
@@ -76,23 +76,17 @@ struct WorkoutView: View {
                 }
             }
         }
-        // 種目がある場合はスワイプ閉じを無効化（❌ボタンから確認ダイアログ経由で閉じる）
         .interactiveDismissDisabled(hasUnsavedChanges)
         .onAppear {
-            let repo = WorkoutRepository(modelContext: modelContext)
-            viewModel = WorkoutViewModel(session: session, repository: repo)
+            setupEditContext()
         }
-        // 保存以外の方法で閉じた場合はロールバック（onDisappear は rollback の確実な実行タイミング）
-        .onDisappear {
-            if !didSave {
-                viewModel?.cancel(context: modelContext)
-            }
-        }
+        // キャンセル: edit context を保存しないまま破棄するだけ。主 context は無変更。
+        // 保存:      edit context.save() 済み。onDismiss で呼ばれる loadData() が主 context を再読み込み。
         .sheet(isPresented: $showingTemplates) {
             NavigationStack {
-                if let vm = viewModel {
+                if let vm = viewModel, let ctx = editContext {
                     TemplateListView { template in
-                        vm.applyTemplate(template, context: modelContext)
+                        vm.applyTemplate(template, context: ctx)
                         showingTemplates = false
                     }
                 }
@@ -104,12 +98,32 @@ struct WorkoutView: View {
             titleVisibility: .visible
         ) {
             Button("破棄する", role: .destructive) {
-                viewModel?.cancel(context: modelContext)
                 dismiss()
             }
             Button("続ける", role: .cancel) {}
         } message: {
             Text("変更内容は保存されません")
+        }
+    }
+
+    // MARK: - Edit Context セットアップ
+
+    private func setupEditContext() {
+        let ctx = ModelContext(modelContainer)
+        ctx.autosaveEnabled = false
+        editContext = ctx
+
+        let repo = WorkoutRepository(modelContext: ctx)
+
+        // 指定日の session を edit context 内で取得。
+        // 存在すれば編集モード、なければ新規作成モード。
+        // 主 context の session オブジェクトは一切参照しないため観察の漏れが発生しない。
+        if let existing = try? repo.fetchSession(for: sessionDate) {
+            viewModel = WorkoutViewModel(session: existing, repository: repo)
+        } else {
+            let newSession = WorkoutSession(date: sessionDate)
+            ctx.insert(newSession)
+            viewModel = WorkoutViewModel(session: newSession, repository: repo)
         }
     }
 }

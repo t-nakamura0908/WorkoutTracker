@@ -37,9 +37,10 @@ struct CalendarView: View {
             viewModel = vm
             await vm.loadMonth()
         }
-        .sheet(item: $selectedSession) { session in
-            WorkoutView(session: session)
-                .onDisappear { Task { await viewModel?.loadMonth() } }
+        .sheet(item: $selectedSession, onDismiss: {
+            Task { await viewModel?.loadMonth() }
+        }) { session in
+            WorkoutView(sessionDate: session.date)
         }
         .sheet(isPresented: $showingCondition) {
             if let vm = viewModel {
