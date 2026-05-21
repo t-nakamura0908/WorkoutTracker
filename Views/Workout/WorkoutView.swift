@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 struct WorkoutView: View {
-    @Environment(\.modelContainer) private var modelContainer
+    @Environment(\.modelContext) private var mainContext  // container 取得のみに使用
     @Environment(\.dismiss) private var dismiss
     /// 編集対象の日付。WorkoutView はこの日付を基に内部で専用 context を作成する。
     let sessionDate: Date
@@ -109,7 +109,7 @@ struct WorkoutView: View {
     // MARK: - Edit Context セットアップ
 
     private func setupEditContext() {
-        let ctx = ModelContext(modelContainer)
+        let ctx = ModelContext(mainContext.container)
         ctx.autosaveEnabled = false
         editContext = ctx
 
