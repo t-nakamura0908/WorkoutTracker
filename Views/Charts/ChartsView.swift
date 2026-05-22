@@ -214,10 +214,10 @@ private struct WeightChartCard: View {
                     .symbolSize(50)
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
-                .chartXScale(domain: period.startDate...Date.now)
+                .chartXScale(domain: period.domainStart(dataStart: data.first?.date)...Date.now)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: period.xAxisStride)) {
-                        AxisValueLabel(format: period.xAxisLabelFormat)
+                    AxisMarks(values: .stride(by: period.xAxisStride(dataStart: data.first?.date))) {
+                        AxisValueLabel(format: period.xAxisLabelFormat(dataStart: data.first?.date))
                         AxisGridLine()
                     }
                 }
@@ -261,10 +261,10 @@ private struct OneRMChartCard: View {
                     .symbolSize(50)
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
-                .chartXScale(domain: period.startDate...Date.now)
+                .chartXScale(domain: period.domainStart(dataStart: data.first?.date)...Date.now)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: period.xAxisStride)) {
-                        AxisValueLabel(format: period.xAxisLabelFormat)
+                    AxisMarks(values: .stride(by: period.xAxisStride(dataStart: data.first?.date))) {
+                        AxisValueLabel(format: period.xAxisLabelFormat(dataStart: data.first?.date))
                         AxisGridLine()
                     }
                 }
@@ -297,10 +297,10 @@ private struct RepsChartCard: View {
                     .foregroundStyle(.green.gradient)
                     .cornerRadius(4)
                 }
-                .chartXScale(domain: period.startDate...Date.now)
+                .chartXScale(domain: period.domainStart(dataStart: data.first?.date)...Date.now)
                 .chartXAxis {
-                    AxisMarks(values: .stride(by: period.xAxisStride)) {
-                        AxisValueLabel(format: period.xAxisLabelFormat)
+                    AxisMarks(values: .stride(by: period.xAxisStride(dataStart: data.first?.date))) {
+                        AxisValueLabel(format: period.xAxisLabelFormat(dataStart: data.first?.date))
                         AxisGridLine()
                     }
                 }
@@ -383,10 +383,10 @@ private struct BodyCompositionCard: View {
                         .symbolSize(45)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
-                    .chartXScale(domain: period.startDate...Date.now)
+                    .chartXScale(domain: period.domainStart(dataStart: weightData.first?.date)...Date.now)
                     .chartXAxis {
-                        AxisMarks(values: .stride(by: period.xAxisStride)) {
-                            AxisValueLabel(format: period.xAxisLabelFormat)
+                        AxisMarks(values: .stride(by: period.xAxisStride(dataStart: weightData.first?.date))) {
+                            AxisValueLabel(format: period.xAxisLabelFormat(dataStart: weightData.first?.date))
                             AxisGridLine()
                         }
                     }
@@ -421,10 +421,10 @@ private struct BodyCompositionCard: View {
                         .symbolSize(45)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
-                    .chartXScale(domain: period.startDate...Date.now)
+                    .chartXScale(domain: period.domainStart(dataStart: fatData.first?.date)...Date.now)
                     .chartXAxis {
-                        AxisMarks(values: .stride(by: period.xAxisStride)) {
-                            AxisValueLabel(format: period.xAxisLabelFormat)
+                        AxisMarks(values: .stride(by: period.xAxisStride(dataStart: fatData.first?.date))) {
+                            AxisValueLabel(format: period.xAxisLabelFormat(dataStart: fatData.first?.date))
                             AxisGridLine()
                         }
                     }

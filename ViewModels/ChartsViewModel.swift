@@ -26,18 +26,33 @@ enum ChartPeriod: String, CaseIterable, Identifiable {
         }
     }
 
-    var xAxisStride: Calendar.Component {
+    /// データの先頭日付を渡すと全期間でも適切なドメイン開始日を返す
+    func domainStart(dataStart: Date? = nil) -> Date {
+        self == .all ? (dataStart ?? Date.now.adding(days: -365)) : startDate
+    }
+
+    func xAxisStride(dataStart: Date? = nil) -> Calendar.Component {
         switch self {
         case .oneWeek:  return .day
         case .oneMonth: return .weekOfYear
-        default:        return .month
+        case .all:
+            guard let start = dataStart else { return .month }
+            return Date.now.timeIntervalSince(start) > 365 * 2 * 86400 ? .year : .month
+        default: return .month
         }
     }
 
-    var xAxisLabelFormat: Date.FormatStyle {
+    func xAxisLabelFormat(dataStart: Date? = nil) -> Date.FormatStyle {
         switch self {
         case .oneWeek, .oneMonth:
             return .dateTime.month(.abbreviated).day().locale(Locale(identifier: "ja_JP"))
+        case .all:
+            guard let start = dataStart else {
+                return .dateTime.month(.abbreviated).locale(Locale(identifier: "ja_JP"))
+            }
+            return Date.now.timeIntervalSince(start) > 365 * 2 * 86400
+                ? .dateTime.year().locale(Locale(identifier: "ja_JP"))
+                : .dateTime.month(.abbreviated).locale(Locale(identifier: "ja_JP"))
         default:
             return .dateTime.month(.abbreviated).locale(Locale(identifier: "ja_JP"))
         }
@@ -91,7 +106,7 @@ struct MuscleGroupVolume: Identifiable {
 final class ChartsViewModel {
     // ナビゲーション
     var selectedTab: ChartTab = .weight
-    var selectedPeriod: ChartPeriod = .threeMonths {
+    var selectedPeriod: ChartPeriod = .oneWeek {
         didSet { Task { await loadAllData() } }
     }
     var selectedExerciseName: String = "" {
