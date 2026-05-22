@@ -6,7 +6,6 @@ import Observation
 // MARK: - Supporting Types
 
 enum ChartPeriod: String, CaseIterable, Identifiable {
-    case oneWeek     = "1週間"
     case oneMonth    = "1ヶ月"
     case threeMonths = "3ヶ月"
     case sixMonths   = "6ヶ月"
@@ -17,12 +16,33 @@ enum ChartPeriod: String, CaseIterable, Identifiable {
 
     var startDate: Date {
         switch self {
-        case .oneWeek:      return Date.now.adding(days: -7)
         case .oneMonth:     return Date.now.adding(days: -30)
         case .threeMonths:  return Date.now.adding(days: -90)
         case .sixMonths:    return Date.now.adding(days: -180)
         case .oneYear:      return Date.now.adding(days: -365)
         case .all:          return .distantPast
+        }
+    }
+
+    /// 期間に応じた集約単位（この単位でデータをまとめる）
+    var aggregationUnit: Calendar.Component {
+        switch self {
+        case .oneMonth:                  return .day
+        case .threeMonths, .sixMonths:   return .weekOfYear
+        case .oneYear, .all:             return .month
+        }
+    }
+
+    /// 指定日付が属する集約バケットの開始日を返す
+    func bucketStart(of date: Date) -> Date {
+        let cal = Calendar.current
+        switch aggregationUnit {
+        case .day:
+            return cal.startOfDay(for: date)
+        case .weekOfYear:
+            return cal.dateInterval(of: .weekOfYear, for: date)?.start ?? cal.startOfDay(for: date)
+        default: // .month
+            return date.startOfMonth
         }
     }
 
@@ -33,18 +53,18 @@ enum ChartPeriod: String, CaseIterable, Identifiable {
 
     func xAxisStride(dataStart: Date? = nil) -> Calendar.Component {
         switch self {
-        case .oneWeek:  return .day
-        case .oneMonth: return .weekOfYear
+        case .oneMonth:                 return .weekOfYear
+        case .threeMonths, .sixMonths:  return .month
+        case .oneYear:                  return .month
         case .all:
             guard let start = dataStart else { return .month }
             return Date.now.timeIntervalSince(start) > 365 * 2 * 86400 ? .year : .month
-        default: return .month
         }
     }
 
     func xAxisLabelFormat(dataStart: Date? = nil) -> Date.FormatStyle {
         switch self {
-        case .oneWeek, .oneMonth:
+        case .oneMonth:
             return .dateTime.month(.abbreviated).day().locale(Locale(identifier: "ja_JP"))
         case .all:
             guard let start = dataStart else {
@@ -106,7 +126,7 @@ struct MuscleGroupVolume: Identifiable {
 final class ChartsViewModel {
     // ナビゲーション
     var selectedTab: ChartTab = .weight
-    var selectedPeriod: ChartPeriod = .oneWeek {
+    var selectedPeriod: ChartPeriod = .oneMonth {
         didSet { Task { await loadAllData() } }
     }
     var selectedExerciseName: String = "" {
@@ -189,32 +209,32 @@ final class ChartsViewModel {
             let history = try repository.fetchExerciseHistory(name: name)
             let filtered = history.filter { ($0.session?.date ?? .distantPast) >= selectedPeriod.startDate }
 
-            // 同じ日に同名種目が複数ある場合に備え、日付でグループ化して最大値を採用
-            let byDay = Dictionary(grouping: filtered) { exercise in
-                Calendar.current.startOfDay(for: exercise.session?.date ?? .now)
+            // 期間に応じたバケット（日／週／月）でグループ化して集約
+            let byBucket = Dictionary(grouping: filtered) { exercise in
+                selectedPeriod.bucketStart(of: exercise.session?.date ?? .now)
             }
-            let sortedDays = byDay.keys.sorted()
+            let sortedBuckets = byBucket.keys.sorted()
 
-            weightData = sortedDays.compactMap { day -> ChartDataPoint? in
-                let exercises = byDay[day] ?? []
+            weightData = sortedBuckets.compactMap { bucket -> ChartDataPoint? in
+                let exercises = byBucket[bucket] ?? []
                 let w = exercises.flatMap { $0.sets }.map(\.weight).max() ?? 0
                 guard w > 0 else { return nil }
-                return ChartDataPoint(date: day, value: w, label: name)
+                return ChartDataPoint(date: bucket, value: w, label: name)
             }
 
-            oneRMData = sortedDays.compactMap { day -> ChartDataPoint? in
-                let exercises = byDay[day] ?? []
+            oneRMData = sortedBuckets.compactMap { bucket -> ChartDataPoint? in
+                let exercises = byBucket[bucket] ?? []
                 let orm = exercises.flatMap { $0.sets }
                     .map { estimateOneRM(weight: $0.weight, reps: $0.reps) }.max() ?? 0
                 guard orm > 0 else { return nil }
-                return ChartDataPoint(date: day, value: orm, label: name)
+                return ChartDataPoint(date: bucket, value: orm, label: name)
             }
 
-            repsData = sortedDays.compactMap { day -> ChartDataPoint? in
-                let exercises = byDay[day] ?? []
+            repsData = sortedBuckets.compactMap { bucket -> ChartDataPoint? in
+                let exercises = byBucket[bucket] ?? []
                 let total = exercises.reduce(0) { $0 + $1.totalReps }
                 guard total > 0 else { return nil }
-                return ChartDataPoint(date: day, value: Double(total), label: name)
+                return ChartDataPoint(date: bucket, value: Double(total), label: name)
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -244,14 +264,22 @@ final class ChartsViewModel {
         do {
             let conditions = try repository.fetchConditions()
             let filtered = conditions.filter { $0.date >= selectedPeriod.startDate }
-            bodyWeightData = filtered
-                .filter { $0.bodyWeight > 0 }
-                .map { ChartDataPoint(date: $0.date, value: $0.bodyWeight, label: "体重") }
-                .sorted { $0.date < $1.date }
-            bodyFatData = filtered
-                .filter { $0.bodyFatPercentage > 0 }
-                .map { ChartDataPoint(date: $0.date, value: $0.bodyFatPercentage, label: "体脂肪率") }
-                .sorted { $0.date < $1.date }
+
+            let weightByBucket = Dictionary(grouping: filtered.filter { $0.bodyWeight > 0 }) {
+                selectedPeriod.bucketStart(of: $0.date)
+            }
+            bodyWeightData = weightByBucket.map { bucket, items -> ChartDataPoint in
+                let avg = items.map(\.bodyWeight).reduce(0, +) / Double(items.count)
+                return ChartDataPoint(date: bucket, value: avg, label: "体重")
+            }.sorted { $0.date < $1.date }
+
+            let fatByBucket = Dictionary(grouping: filtered.filter { $0.bodyFatPercentage > 0 }) {
+                selectedPeriod.bucketStart(of: $0.date)
+            }
+            bodyFatData = fatByBucket.map { bucket, items -> ChartDataPoint in
+                let avg = items.map(\.bodyFatPercentage).reduce(0, +) / Double(items.count)
+                return ChartDataPoint(date: bucket, value: avg, label: "体脂肪率")
+            }.sorted { $0.date < $1.date }
         } catch {
             errorMessage = error.localizedDescription
         }
