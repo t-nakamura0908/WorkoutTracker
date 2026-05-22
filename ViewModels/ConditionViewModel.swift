@@ -5,6 +5,7 @@ import Observation
 @Observable
 final class ConditionViewModel {
     var condition: DailyCondition
+    var isDirty = false
     var errorMessage: String?
 
     init(condition: DailyCondition) {

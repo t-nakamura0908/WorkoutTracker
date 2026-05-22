@@ -9,6 +9,12 @@ struct ConditionView: View {
 
     @State private var editContext: ModelContext?
     @State private var viewModel: ConditionViewModel?
+    @State private var showingCancelConfirmation = false
+    @State private var didSave = false
+
+    private var hasUnsavedChanges: Bool {
+        viewModel?.isDirty == true && !didSave
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,13 +29,23 @@ struct ConditionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("キャンセル") { dismiss() }
+                    Button {
+                        if hasUnsavedChanges {
+                            showingCancelConfirmation = true
+                        } else {
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .fontWeight(.medium)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     if let vm = viewModel, let ctx = editContext {
                         Button("保存") {
                             do {
                                 try ctx.save()
+                                didSave = true
                                 dismiss()
                             } catch {
                                 vm.errorMessage = error.localizedDescription
@@ -40,8 +56,21 @@ struct ConditionView: View {
                 }
             }
         }
+        .interactiveDismissDisabled(hasUnsavedChanges)
         .onAppear {
             setupEditContext()
+        }
+        .confirmationDialog(
+            "変更を破棄しますか？",
+            isPresented: $showingCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("破棄する", role: .destructive) {
+                dismiss()
+            }
+            Button("続ける", role: .cancel) {}
+        } message: {
+            Text("変更内容は保存されません")
         }
     }
 
@@ -83,6 +112,7 @@ private struct ConditionFormView: View {
                     score: $viewModel.condition.conditionScore
                 )
                 .padding(.vertical, 4)
+                .onChange(of: viewModel.condition.conditionScore) { _, _ in viewModel.isDirty = true }
 
                 ScorePickerView(
                     title: "睡眠の質",
@@ -90,6 +120,7 @@ private struct ConditionFormView: View {
                     score: $viewModel.condition.sleepScore
                 )
                 .padding(.vertical, 4)
+                .onChange(of: viewModel.condition.sleepScore) { _, _ in viewModel.isDirty = true }
 
                 ScorePickerView(
                     title: "疲労度（5=元気）",
@@ -97,6 +128,7 @@ private struct ConditionFormView: View {
                     score: $viewModel.condition.fatigueScore
                 )
                 .padding(.vertical, 4)
+                .onChange(of: viewModel.condition.fatigueScore) { _, _ in viewModel.isDirty = true }
             }
 
             // MARK: 身体データ
@@ -134,16 +166,10 @@ private struct ConditionFormView: View {
                     .focused($focusedField, equals: .notes)
                     .submitLabel(.done)
                     .onSubmit { focusedField = nil }
+                    .onChange(of: viewModel.condition.notes) { _, _ in viewModel.isDirty = true }
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("完了") { focusedField = nil }
-                    .fontWeight(.semibold)
-            }
-        }
         .alert("エラー", isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil } }
@@ -179,6 +205,7 @@ private struct ConditionFormView: View {
                 .focused($focusedField, equals: field)
                 .submitLabel(.next)
                 .onSubmit { focusedField = next }
+                .onChange(of: value.wrappedValue) { _, _ in viewModel.isDirty = true }
 
             Text(unit)
                 .foregroundStyle(.secondary)
