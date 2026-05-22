@@ -25,7 +25,7 @@ struct StatCardView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
