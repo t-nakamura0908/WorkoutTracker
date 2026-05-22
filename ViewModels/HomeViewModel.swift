@@ -23,10 +23,10 @@ final class HomeViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            // context.rollback() 後は @Observable の変更通知が発行されないため、
-            // 一度 nil / 空配列にしてから再代入することで SwiftUI にビューの再構築を強制する。
-            // fetchSession/fetchSessions は同期関数なので nil → 再代入は同一 RunLoop tick で
-            // コアレスされ、画面上のちらつきは発生しない。
+            // 別コンテキスト(editContext)からの save 通知が主コンテキストにマージされるのを待つ
+            await Task.yield()
+
+            // nil → 再代入で SwiftUI にビューの強制再構築を促す
             todaySession = nil
             recentSessions = []
 

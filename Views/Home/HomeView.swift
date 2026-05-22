@@ -29,10 +29,10 @@ struct HomeView: View {
             viewModel = vm
             await vm.loadData()
         }
-        // WorkoutView は内部で専用 context を作成するため session オブジェクトを渡さない。
-        // 保存・キャンセルどちらの場合も onDismiss で DB から再読み込みして表示を同期する。
+        // 保存・キャンセルに関わらず閉じたら今日のトレーニングを再読み込み
         .sheet(isPresented: $showingWorkout, onDismiss: {
-            Task { await viewModel?.loadData() }
+            guard let vm = viewModel else { return }
+            Task { @MainActor in await vm.loadData() }
         }) {
             WorkoutView(sessionDate: .now)
         }
