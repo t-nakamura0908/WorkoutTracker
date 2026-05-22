@@ -32,8 +32,7 @@ struct HistoryView: View {
             }
         }
         .task {
-            let repo = WorkoutRepository(modelContext: modelContext)
-            let vm = HistoryViewModel(repository: repo)
+            let vm = HistoryViewModel(container: modelContext.container)
             viewModel = vm
             await vm.loadData()
         }
@@ -51,7 +50,6 @@ struct HistoryView: View {
 }
 
 private struct HistoryContentView: View {
-    @Environment(\.modelContext) private var modelContext
     @Bindable var viewModel: HistoryViewModel
     @Binding var selectedSession: WorkoutSession?
 
@@ -80,7 +78,7 @@ private struct HistoryContentView: View {
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     Task {
-                                        await viewModel.deleteSession(session, context: modelContext)
+                                        await viewModel.deleteSession(session)
                                     }
                                 } label: {
                                     Label("削除", systemImage: "trash")

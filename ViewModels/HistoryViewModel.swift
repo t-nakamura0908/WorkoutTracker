@@ -9,16 +9,16 @@ final class HistoryViewModel {
     var searchText = "" {
         didSet { applyFilter() }
     }
-    var selectedSegment = 0
     var isLoading = false
     var errorMessage: String?
     var exerciseNames: [String] = []
-    var selectedExerciseName: String?
 
-    private let repository: WorkoutRepositoryProtocol
+    private let container: ModelContainer
+    /// フェッチしたオブジェクトが有効な間、コンテキストを保持する
+    private var loadContext: ModelContext?
 
-    init(repository: WorkoutRepositoryProtocol) {
-        self.repository = repository
+    init(container: ModelContainer) {
+        self.container = container
     }
 
     @MainActor
@@ -26,12 +26,15 @@ final class HistoryViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            // rollback 後の @Observable 通知漏れ対策: 一度空にしてから再代入
             sessions = []
             filteredSessions = []
 
-            sessions = try repository.fetchSessions()
-            exerciseNames = try repository.fetchAllExerciseNames()
+            let ctx = ModelContext(container)
+            loadContext = ctx
+            let repo = WorkoutRepository(modelContext: ctx)
+
+            sessions = try repo.fetchSessions()
+            exerciseNames = try repo.fetchAllExerciseNames()
             applyFilter()
         } catch {
             errorMessage = error.localizedDescription
@@ -39,26 +42,17 @@ final class HistoryViewModel {
     }
 
     @MainActor
-    func deleteSession(_ session: WorkoutSession, context: ModelContext) async {
-        let repo = WorkoutRepository(modelContext: context)
+    func deleteSession(_ session: WorkoutSession) async {
+        let sessionID = session.persistentModelID
         do {
-            try repo.delete(session: session)
-            sessions.removeAll { $0.id == session.id }
+            let ctx = ModelContext(container)
+            if let toDelete = ctx.model(for: sessionID) as? WorkoutSession {
+                try WorkoutRepository(modelContext: ctx).delete(session: toDelete)
+            }
+            sessions.removeAll { $0.persistentModelID == sessionID }
             applyFilter()
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-
-    private func applyFilter() {
-        if searchText.isEmpty {
-            filteredSessions = sessions
-        } else {
-            filteredSessions = sessions.filter { session in
-                session.exercises.contains { exercise in
-                    exercise.name.localizedCaseInsensitiveContains(searchText)
-                }
-            }
         }
     }
 
@@ -71,5 +65,17 @@ final class HistoryViewModel {
             session.date.monthString
         }
         return grouped.sorted { $0.key > $1.key }
+    }
+
+    private func applyFilter() {
+        if searchText.isEmpty {
+            filteredSessions = sessions
+        } else {
+            filteredSessions = sessions.filter { session in
+                session.exercises.contains { exercise in
+                    exercise.name.localizedCaseInsensitiveContains(searchText)
+                }
+            }
+        }
     }
 }
