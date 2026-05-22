@@ -42,12 +42,10 @@ struct CalendarView: View {
         }) { session in
             WorkoutView(sessionDate: session.date)
         }
-        .sheet(isPresented: $showingCondition) {
-            if let vm = viewModel {
-                ConditionView(existingCondition: vm.selectedCondition) {
-                    Task { await vm.loadMonth() }
-                }
-            }
+        .sheet(isPresented: $showingCondition, onDismiss: {
+            Task { await viewModel?.loadMonth() }
+        }) {
+            ConditionView(existingCondition: viewModel?.selectedCondition)
         }
     }
 }

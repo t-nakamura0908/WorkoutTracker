@@ -35,10 +35,12 @@ struct HomeView: View {
         }) {
             WorkoutView(sessionDate: .now)
         }
-        .sheet(isPresented: $showingCondition) {
-            ConditionView(existingCondition: viewModel?.todayCondition) {
-                Task { await viewModel?.loadData() }
-            }
+        // 保存・キャンセルに関わらず閉じたら今日のコンディションを再読み込み
+        .sheet(isPresented: $showingCondition, onDismiss: {
+            guard let vm = viewModel else { return }
+            Task { @MainActor in await vm.loadData() }
+        }) {
+            ConditionView(existingCondition: viewModel?.todayCondition)
         }
     }
 }

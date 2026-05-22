@@ -2,12 +2,12 @@ import SwiftUI
 import SwiftData
 
 struct ConditionView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) private var mainContext
     @Environment(\.dismiss) private var dismiss
 
     let existingCondition: DailyCondition?
-    let onSave: () -> Void
 
+    @State private var editContext: ModelContext?
     @State private var viewModel: ConditionViewModel?
 
     var body: some View {
@@ -26,14 +26,13 @@ struct ConditionView: View {
                     Button("キャンセル") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if let vm = viewModel {
+                    if let vm = viewModel, let ctx = editContext {
                         Button("保存") {
-                            Task {
-                                await vm.save(context: modelContext)
-                                if vm.errorMessage == nil {
-                                    onSave()
-                                    dismiss()
-                                }
+                            do {
+                                try ctx.save()
+                                dismiss()
+                            } catch {
+                                vm.errorMessage = error.localizedDescription
                             }
                         }
                         .fontWeight(.semibold)
@@ -42,14 +41,25 @@ struct ConditionView: View {
             }
         }
         .onAppear {
-            let repo = WorkoutRepository(modelContext: modelContext)
-            let condition = existingCondition ?? DailyCondition(date: .now)
-            viewModel = ConditionViewModel(
-                condition: condition,
-                repository: repo,
-                isNew: existingCondition == nil
-            )
+            setupEditContext()
         }
+    }
+
+    private func setupEditContext() {
+        let ctx = ModelContext(mainContext.container)
+        ctx.autosaveEnabled = false
+        editContext = ctx
+
+        let repo = WorkoutRepository(modelContext: ctx)
+        let condition: DailyCondition
+        if let existing = existingCondition,
+           let fetched = try? repo.fetchCondition(for: existing.date) {
+            condition = fetched
+        } else {
+            condition = DailyCondition(date: .now)
+            ctx.insert(condition)
+        }
+        viewModel = ConditionViewModel(condition: condition)
     }
 }
 
@@ -58,7 +68,6 @@ struct ConditionView: View {
 private struct ConditionFormView: View {
     @Bindable var viewModel: ConditionViewModel
 
-    // フォーカス管理
     enum Field: Hashable {
         case bodyWeight, bodyFat, protein, notes
     }
@@ -127,9 +136,7 @@ private struct ConditionFormView: View {
                     .onSubmit { focusedField = nil }
             }
         }
-        // スクロールでキーボードを閉じる
         .scrollDismissesKeyboard(.interactively)
-        // キーボードツールバー（「完了」ボタン）
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -146,8 +153,6 @@ private struct ConditionFormView: View {
             Text(viewModel.errorMessage ?? "")
         }
     }
-
-    // MARK: 数値入力行
 
     private func numberRow(
         title: String,
@@ -167,7 +172,6 @@ private struct ConditionFormView: View {
 
             Spacer()
 
-            // 0 の場合は空文字として表示し、入力しやすくする
             TextField("未入力", value: value, format: .number)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
@@ -180,13 +184,12 @@ private struct ConditionFormView: View {
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
         }
-        // 行タップでフォーカス
         .contentShape(Rectangle())
         .onTapGesture { focusedField = field }
     }
 }
 
 #Preview {
-    ConditionView(existingCondition: nil, onSave: {})
+    ConditionView(existingCondition: nil)
         .modelContainer(for: [DailyCondition.self], inMemory: true)
 }
