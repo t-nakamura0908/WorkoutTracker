@@ -24,8 +24,7 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.large)
         }
         .task {
-            let repo = WorkoutRepository(modelContext: modelContext)
-            let vm = HomeViewModel(repository: repo)
+            let vm = HomeViewModel(container: modelContext.container)
             viewModel = vm
             await vm.loadData()
         }

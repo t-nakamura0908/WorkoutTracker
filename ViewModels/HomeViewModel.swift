@@ -12,10 +12,12 @@ final class HomeViewModel {
     var errorMessage: String?
     var showingWorkout = false
 
-    private let repository: WorkoutRepositoryProtocol
+    private let container: ModelContainer
+    /// フェッチしたオブジェクトが有効な間、コンテキストを保持する
+    private var loadContext: ModelContext?
 
-    init(repository: WorkoutRepositoryProtocol) {
-        self.repository = repository
+    init(container: ModelContainer) {
+        self.container = container
     }
 
     @MainActor
@@ -23,16 +25,21 @@ final class HomeViewModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            // 別コンテキスト(editContext)からの save 通知が主コンテキストにマージされるのを待つ
-            await Task.yield()
-
-            // nil → 再代入で SwiftUI にビューの強制再構築を促す
+            // 古いオブジェクト参照を解放してから新しいコンテキストで取得
             todaySession = nil
+            todayCondition = nil
             recentSessions = []
 
-            todaySession = try repository.fetchSession(for: .now)
-            todayCondition = try repository.fetchCondition(for: .now)
-            let all = try repository.fetchSessions()
+            // 毎回フレッシュなコンテキストを作成する。
+            // これにより editContext が save() した内容を確実に反映できる
+            // （主コンテキストのキャッシュに依存しない）。
+            let ctx = ModelContext(container)
+            loadContext = ctx
+            let repo = WorkoutRepository(modelContext: ctx)
+
+            todaySession = try repo.fetchSession(for: .now)
+            todayCondition = try repo.fetchCondition(for: .now)
+            let all = try repo.fetchSessions()
             recentSessions = Array(all.prefix(5))
             currentStreak = Self.calculateStreak(from: all)
         } catch {
@@ -42,14 +49,6 @@ final class HomeViewModel {
 
     @MainActor
     func createTodaySession(context: ModelContext) async {
-        guard todaySession == nil else {
-            showingWorkout = true
-            return
-        }
-        // WorkoutView の「保存」ボタンで初めて永続化するため、ここでは insert のみ
-        let session = WorkoutSession(date: .now)
-        context.insert(session)
-        todaySession = session
         showingWorkout = true
     }
 
@@ -70,7 +69,6 @@ final class HomeViewModel {
         var streak = 0
         var check = Date.now
 
-        // 今日に記録がなければ昨日から数える
         if !dateSet.contains(fmt.string(from: check)) {
             check = check.adding(days: -1)
         }
