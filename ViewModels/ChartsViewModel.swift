@@ -174,21 +174,32 @@ final class ChartsViewModel {
             let history = try repository.fetchExerciseHistory(name: name)
             let filtered = history.filter { ($0.session?.date ?? .distantPast) >= selectedPeriod.startDate }
 
-            weightData = filtered.compactMap { exercise -> ChartDataPoint? in
-                guard let date = exercise.session?.date else { return nil }
-                let w = exercise.sets.map(\.weight).max() ?? 0
-                return ChartDataPoint(date: date, value: w, label: name)
+            // 同じ日に同名種目が複数ある場合に備え、日付でグループ化して最大値を採用
+            let byDay = Dictionary(grouping: filtered) { exercise in
+                Calendar.current.startOfDay(for: exercise.session?.date ?? .now)
+            }
+            let sortedDays = byDay.keys.sorted()
+
+            weightData = sortedDays.compactMap { day -> ChartDataPoint? in
+                let exercises = byDay[day] ?? []
+                let w = exercises.flatMap { $0.sets }.map(\.weight).max() ?? 0
+                guard w > 0 else { return nil }
+                return ChartDataPoint(date: day, value: w, label: name)
             }
 
-            oneRMData = filtered.compactMap { exercise -> ChartDataPoint? in
-                guard let date = exercise.session?.date else { return nil }
-                let orm = exercise.sets.map { estimateOneRM(weight: $0.weight, reps: $0.reps) }.max() ?? 0
-                return ChartDataPoint(date: date, value: orm, label: name)
+            oneRMData = sortedDays.compactMap { day -> ChartDataPoint? in
+                let exercises = byDay[day] ?? []
+                let orm = exercises.flatMap { $0.sets }
+                    .map { estimateOneRM(weight: $0.weight, reps: $0.reps) }.max() ?? 0
+                guard orm > 0 else { return nil }
+                return ChartDataPoint(date: day, value: orm, label: name)
             }
 
-            repsData = filtered.compactMap { exercise -> ChartDataPoint? in
-                guard let date = exercise.session?.date else { return nil }
-                return ChartDataPoint(date: date, value: Double(exercise.totalReps), label: name)
+            repsData = sortedDays.compactMap { day -> ChartDataPoint? in
+                let exercises = byDay[day] ?? []
+                let total = exercises.reduce(0) { $0 + $1.totalReps }
+                guard total > 0 else { return nil }
+                return ChartDataPoint(date: day, value: Double(total), label: name)
             }
         } catch {
             errorMessage = error.localizedDescription
