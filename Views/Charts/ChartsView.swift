@@ -127,19 +127,20 @@ private struct ChartsContentView: View {
         switch viewModel.selectedTab {
         case .weight:
             exercisePickerMenu
-            WeightChartCard(data: viewModel.weightData, exerciseName: viewModel.selectedExerciseName)
+            WeightChartCard(data: viewModel.weightData, exerciseName: viewModel.selectedExerciseName, period: viewModel.selectedPeriod)
         case .oneRM:
             exercisePickerMenu
-            OneRMChartCard(data: viewModel.oneRMData, exerciseName: viewModel.selectedExerciseName)
+            OneRMChartCard(data: viewModel.oneRMData, exerciseName: viewModel.selectedExerciseName, period: viewModel.selectedPeriod)
         case .reps:
             exercisePickerMenu
-            RepsChartCard(data: viewModel.repsData, exerciseName: viewModel.selectedExerciseName)
+            RepsChartCard(data: viewModel.repsData, exerciseName: viewModel.selectedExerciseName, period: viewModel.selectedPeriod)
         case .monthly:
             MonthlyChartCard(data: viewModel.monthlyCountData)
         case .body:
             BodyCompositionCard(
                 weightData: viewModel.bodyWeightData,
-                fatData: viewModel.bodyFatData
+                fatData: viewModel.bodyFatData,
+                period: viewModel.selectedPeriod
             )
         case .muscle:
             MuscleGroupCard(
@@ -183,6 +184,7 @@ private struct ChartsContentView: View {
 private struct WeightChartCard: View {
     let data: [ChartDataPoint]
     let exerciseName: String
+    let period: ChartPeriod
 
     var body: some View {
         ChartCard(title: "\(exerciseName) 最大重量推移", yLabel: "kg") {
@@ -208,15 +210,17 @@ private struct WeightChartCard: View {
                         x: .value("日付", point.date),
                         y: .value("重量", point.value)
                     )
-                    .foregroundStyle(point.isPR ? .yellow : .blue)
-                    .symbolSize(point.isPR ? 100 : 50)
-                    .annotation(position: .top) {
-                        if point.isPR {
-                            PRBadge()
-                        }
-                    }
+                    .foregroundStyle(.blue)
+                    .symbolSize(50)
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
+                .chartXScale(domain: period.startDate...Date.now)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: period.xAxisStride)) {
+                        AxisValueLabel(format: period.xAxisLabelFormat)
+                        AxisGridLine()
+                    }
+                }
             }
         }
     }
@@ -227,6 +231,7 @@ private struct WeightChartCard: View {
 private struct OneRMChartCard: View {
     let data: [ChartDataPoint]
     let exerciseName: String
+    let period: ChartPeriod
 
     var body: some View {
         ChartCard(title: "\(exerciseName) 推定1RM推移", yLabel: "kg") {
@@ -252,15 +257,17 @@ private struct OneRMChartCard: View {
                         x: .value("日付", point.date),
                         y: .value("1RM", point.value)
                     )
-                    .foregroundStyle(point.isPR ? .yellow : .purple)
-                    .symbolSize(point.isPR ? 100 : 50)
-                    .annotation(position: .top) {
-                        if point.isPR {
-                            PRBadge()
-                        }
-                    }
+                    .foregroundStyle(.purple)
+                    .symbolSize(50)
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
+                .chartXScale(domain: period.startDate...Date.now)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: period.xAxisStride)) {
+                        AxisValueLabel(format: period.xAxisLabelFormat)
+                        AxisGridLine()
+                    }
+                }
             }
         } footer: {
             Text("エプリー式: 重量 × (1 + 回数 ÷ 30) で算出")
@@ -275,6 +282,7 @@ private struct OneRMChartCard: View {
 private struct RepsChartCard: View {
     let data: [ChartDataPoint]
     let exerciseName: String
+    let period: ChartPeriod
 
     var body: some View {
         ChartCard(title: "\(exerciseName) 総回数推移", yLabel: "回") {
@@ -288,6 +296,13 @@ private struct RepsChartCard: View {
                     )
                     .foregroundStyle(.green.gradient)
                     .cornerRadius(4)
+                }
+                .chartXScale(domain: period.startDate...Date.now)
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: period.xAxisStride)) {
+                        AxisValueLabel(format: period.xAxisLabelFormat)
+                        AxisGridLine()
+                    }
                 }
             }
         }
@@ -336,6 +351,7 @@ private struct MonthlyChartCard: View {
 private struct BodyCompositionCard: View {
     let weightData: [ChartDataPoint]
     let fatData: [ChartDataPoint]
+    let period: ChartPeriod
 
     var body: some View {
         VStack(spacing: 12) {
@@ -367,6 +383,13 @@ private struct BodyCompositionCard: View {
                         .symbolSize(45)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
+                    .chartXScale(domain: period.startDate...Date.now)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: period.xAxisStride)) {
+                            AxisValueLabel(format: period.xAxisLabelFormat)
+                            AxisGridLine()
+                        }
+                    }
                 }
             }
 
@@ -398,6 +421,13 @@ private struct BodyCompositionCard: View {
                         .symbolSize(45)
                     }
                     .chartYScale(domain: .automatic(includesZero: false))
+                    .chartXScale(domain: period.startDate...Date.now)
+                    .chartXAxis {
+                        AxisMarks(values: .stride(by: period.xAxisStride)) {
+                            AxisValueLabel(format: period.xAxisLabelFormat)
+                            AxisGridLine()
+                        }
+                    }
                 }
             }
         }
@@ -524,15 +554,6 @@ private struct ChartEmptyView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, minHeight: 120)
-    }
-}
-
-private struct PRBadge: View {
-    var body: some View {
-        Image(systemName: "trophy.fill")
-            .font(.caption)
-            .foregroundStyle(.yellow)
-            .shadow(color: .orange.opacity(0.4), radius: 2)
     }
 }
 

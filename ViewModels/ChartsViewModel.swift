@@ -6,21 +6,40 @@ import Observation
 // MARK: - Supporting Types
 
 enum ChartPeriod: String, CaseIterable, Identifiable {
-    case oneMonth  = "1ヶ月"
+    case oneWeek     = "1週間"
+    case oneMonth    = "1ヶ月"
     case threeMonths = "3ヶ月"
-    case sixMonths = "6ヶ月"
-    case oneYear   = "1年"
-    case all       = "全期間"
+    case sixMonths   = "6ヶ月"
+    case oneYear     = "1年"
+    case all         = "全期間"
 
     var id: String { rawValue }
 
     var startDate: Date {
         switch self {
+        case .oneWeek:      return Date.now.adding(days: -7)
         case .oneMonth:     return Date.now.adding(days: -30)
         case .threeMonths:  return Date.now.adding(days: -90)
         case .sixMonths:    return Date.now.adding(days: -180)
         case .oneYear:      return Date.now.adding(days: -365)
         case .all:          return .distantPast
+        }
+    }
+
+    var xAxisStride: Calendar.Component {
+        switch self {
+        case .oneWeek:  return .day
+        case .oneMonth: return .weekOfYear
+        default:        return .month
+        }
+    }
+
+    var xAxisLabelFormat: Date.FormatStyle {
+        switch self {
+        case .oneWeek, .oneMonth:
+            return .dateTime.month(.abbreviated).day().locale(Locale(identifier: "ja_JP"))
+        default:
+            return .dateTime.month(.abbreviated).locale(Locale(identifier: "ja_JP"))
         }
     }
 }
@@ -56,7 +75,6 @@ struct ChartDataPoint: Identifiable {
     let date: Date
     let value: Double
     let label: String
-    var isPR: Bool = false
 }
 
 struct MuscleGroupVolume: Identifiable {
@@ -156,23 +174,16 @@ final class ChartsViewModel {
             let history = try repository.fetchExerciseHistory(name: name)
             let filtered = history.filter { ($0.session?.date ?? .distantPast) >= selectedPeriod.startDate }
 
-            var maxWeight: Double = 0
-            var maxOneRM:  Double = 0
-
             weightData = filtered.compactMap { exercise -> ChartDataPoint? in
                 guard let date = exercise.session?.date else { return nil }
                 let w = exercise.sets.map(\.weight).max() ?? 0
-                let isPR = w > maxWeight
-                if isPR { maxWeight = w }
-                return ChartDataPoint(date: date, value: w, label: name, isPR: isPR)
+                return ChartDataPoint(date: date, value: w, label: name)
             }
 
             oneRMData = filtered.compactMap { exercise -> ChartDataPoint? in
                 guard let date = exercise.session?.date else { return nil }
                 let orm = exercise.sets.map { estimateOneRM(weight: $0.weight, reps: $0.reps) }.max() ?? 0
-                let isPR = orm > maxOneRM
-                if isPR { maxOneRM = orm }
-                return ChartDataPoint(date: date, value: orm, label: name, isPR: isPR)
+                return ChartDataPoint(date: date, value: orm, label: name)
             }
 
             repsData = filtered.compactMap { exercise -> ChartDataPoint? in
