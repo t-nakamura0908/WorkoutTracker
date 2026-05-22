@@ -74,16 +74,8 @@ private struct HomeContentView: View {
 
     private var conditionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("コンディション")
-                    .font(.headline)
-                Spacer()
-                Button(viewModel.todayCondition == nil ? "記録する" : "編集") {
-                    showingCondition = true
-                }
-                .font(.subheadline)
-                .foregroundStyle(.blue)
-            }
+            Text("コンディション")
+                .font(.headline)
 
             if let condition = viewModel.todayCondition {
                 ConditionCardView(condition: condition)
